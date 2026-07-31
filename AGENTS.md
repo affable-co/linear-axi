@@ -42,5 +42,5 @@ or pruning over appending.
 
 ## Publishing
 
-- npm package name is `linear-axi-fable` (`linear-axi` on npm is an unrelated MCP wrapper);
-  the bin it installs is `linear-axi`. Skill docs teach `npx -y linear-axi-fable`.
+- npm package and installed binary are both named `linear-axi`. Skill docs teach
+  `npx -y linear-axi`.

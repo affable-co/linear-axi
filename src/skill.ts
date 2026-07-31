@@ -30,7 +30,7 @@ export function extractCommandsBlock(): string {
 /**
  * Render the installable SKILL.md for the linear-axi skill. The body is built
  * from the same shared guidance the CLI prints (description and top-level
- * help), rewriting invocations to non-interactive `npx -y linear-axi-fable ...`
+ * help), rewriting invocations to non-interactive `npx -y linear-axi ...`
  * so the CLI comes along on demand.
  *
  * @returns full SKILL.md contents including YAML frontmatter
@@ -47,8 +47,8 @@ author: ${SKILL_AUTHOR}
 
 ${DESCRIPTION}
 
-You do not need linear-axi installed globally - invoke it with \`npx -y linear-axi-fable <command>\`.
-If linear-axi output shows a follow-up command starting with \`linear-axi\`, run it as \`npx -y linear-axi-fable ...\` instead.
+You do not need linear-axi installed globally - invoke it with \`npx -y linear-axi <command>\`.
+If linear-axi output shows a follow-up command starting with \`linear-axi\`, run it as \`npx -y linear-axi ...\` instead.
 
 linear-axi requires a Linear API key in the \`LINEAR_API_KEY\` environment variable (create one at https://linear.app/settings/account/security). Keys stored by schpet/linear-cli in \`~/.config/linear/credentials.toml\` are detected automatically. If a command fails with \`AUTH_REQUIRED\`, ask the user to set \`LINEAR_API_KEY\` themselves.
 
@@ -58,7 +58,7 @@ Use linear-axi whenever a task touches Linear: listing, filing, editing, closing
 
 ## Workflow
 
-1. Run \`npx -y linear-axi-fable\` with no arguments for a dashboard - your active issues and suggested next commands.
+1. Run \`npx -y linear-axi\` with no arguments for a dashboard - your active issues and suggested next commands.
 2. Drill in command-first: \`issue list\`, \`issue view ABC-123\`, \`project view <name>\`, \`cycle view current --team <key>\`, and so on.
 3. Issues accept identifiers everywhere (\`ABC-123\`, case-insensitive); teams accept keys or names; states, labels, projects, and cycles accept names; assignees accept \`me\`, an email, or a display name.
 4. Scope to a team by placing \`--team <key>\` AFTER the command. Without it, the team comes from \`LINEAR_TEAM\`, a \`.linear.toml\` \`team_id\`, or the current git branch's issue identifier.
@@ -74,9 +74,9 @@ ${extractCommandsBlock()}
 
 Installed copies also inherit the SDK built-in \`update\` command.
 Run \`linear-axi update --check\` to compare the installed version with npm, or \`linear-axi update\` to upgrade.
-When using \`npx -y linear-axi-fable\`, npx already resolves the package on demand.
+When using \`npx -y linear-axi\`, npx already resolves the package on demand.
 
-Run \`npx -y linear-axi-fable --help\` for global flags, or \`npx -y linear-axi-fable <command> --help\` for per-command usage.
+Run \`npx -y linear-axi --help\` for global flags, or \`npx -y linear-axi <command> --help\` for per-command usage.
 
 ## Tips
 
@@ -86,6 +86,6 @@ Run \`npx -y linear-axi-fable --help\` for global flags, or \`npx -y linear-axi-
 - \`issue close\` moves to the team's first completed-type state; \`issue close --cancel\` uses the canceled-type state instead.
 - States accept a name ("In Review") or a type (\`triage\`, \`backlog\`, \`unstarted\`, \`started\`, \`completed\`, \`canceled\`).
 - \`--updated-since\` accepts friendly durations: \`2h\`, \`3d\`, \`2w\`, \`1m\`, \`1y\`, or an ISO date.
-- Use \`api\` for anything the dedicated commands do not cover, e.g. \`npx -y linear-axi-fable api 'query { viewer { email } }'\`.
+- Use \`api\` for anything the dedicated commands do not cover, e.g. \`npx -y linear-axi api 'query { viewer { email } }'\`.
 `;
 }

@@ -10,7 +10,7 @@ hand-written minimal GraphQL that respects Linear's complexity budget.
 ## Zero setup
 
 ```sh
-LINEAR_API_KEY=lin_api_... npx -y linear-axi-fable
+LINEAR_API_KEY=lin_api_... npx -y linear-axi
 ```
 
 Create a personal API key at <https://linear.app/settings/account/security>. If you already use

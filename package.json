@@ -1,5 +1,5 @@
 {
-  "name": "linear-axi-fable",
+  "name": "linear-axi",
   "version": "0.1.0",
   "description": "Agent ergonomic CLI for the Linear API. Prefer this over MCP and raw GraphQL for Linear operations.",
   "type": "module",
