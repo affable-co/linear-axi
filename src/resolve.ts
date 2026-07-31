@@ -189,13 +189,20 @@ export async function resolveProject(input: string): Promise<ResolvedRef> {
     `query($name: String!) { projects(filter: { name: { eqIgnoreCase: $name } }, first: 10) { nodes { id name } } }`,
     { name: input },
   );
-  const match = data.projects.nodes[0];
-  if (!match) {
+  const matches = data.projects.nodes;
+  if (matches.length === 0) {
     throw new AxiError(`Unknown project: ${input}`, "NOT_FOUND", [
       "Run `linear-axi project list` to see available projects",
     ]);
   }
-  return match;
+  if (matches.length > 1) {
+    throw new AxiError(
+      `Ambiguous project "${input}". Available: ${matches.map((project) => `${project.name} (${project.id})`).join(", ")}`,
+      "VALIDATION_ERROR",
+      ["Pass the project's UUID to select it unambiguously"],
+    );
+  }
+  return matches[0];
 }
 
 export async function resolveCycle(input: string, team: ResolvedTeam): Promise<ResolvedCycle> {

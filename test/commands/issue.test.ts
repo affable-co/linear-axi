@@ -319,6 +319,13 @@ describe("issue create", () => {
     expect(mockedGql).not.toHaveBeenCalled();
   });
 
+  it("rejects another flag in place of the title value", async () => {
+    await expect(
+      issueCommand(["create", "--title", "--priority", "high"], teamCtx),
+    ).rejects.toThrow("--title requires a value");
+    expect(mockedGql).not.toHaveBeenCalled();
+  });
+
   it("resolves references and feeds their ids into the mutation input", async () => {
     mockedResolveUser.mockResolvedValue({ id: "u-me", displayName: "Me" });
     mockedGql.mockResolvedValue(createResponse);
@@ -367,6 +374,15 @@ describe("issue update", () => {
     const input = (mockedGql.mock.calls[1][1] as { input: Record<string, unknown> }).input;
     expect(input.addedLabelIds).toEqual(["lbl-bug"]);
     expect(input.removedLabelIds).toEqual(["lbl-old"]);
+  });
+
+  it("finds the issue id after value-taking flags", async () => {
+    mockedGql.mockResolvedValueOnce(coreResponse({ identifier: "DEF-2" })).mockResolvedValueOnce(updateResponse);
+
+    await issueCommand(["update", "--title", "ABC-1", "DEF-2"], teamCtx);
+
+    expect(mockedGql.mock.calls[0][1]).toEqual({ id: "DEF-2" });
+    expect((mockedGql.mock.calls[1][1] as { input: Record<string, unknown> }).input.title).toBe("ABC-1");
   });
 
   it("clears the assignee for --assignee none", async () => {
@@ -502,5 +518,28 @@ describe("issue start", () => {
 
     expect(mockedExecFile).not.toHaveBeenCalled();
     expect(result).toContain("(skipped)");
+  });
+
+  it("throws after the Linear update when Git checkout fails", async () => {
+    mockedResolveUser.mockResolvedValue({ id: "me-id", displayName: "Me" });
+    mockedResolveState.mockResolvedValue({ id: "s-started", name: "In Progress", type: "started" });
+    mockedGql
+      .mockResolvedValueOnce(coreResponse({ stateType: "unstarted", assignee: null }))
+      .mockResolvedValueOnce(updateResponse);
+    mockedExecFile
+      .mockImplementationOnce(((_cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
+        (cb as (e: Error | null, out: string, err: string) => void)(null, "", "");
+        return {} as never;
+      }) as never)
+      .mockImplementationOnce(((_cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
+        (cb as (e: Error | null, out: string, err: string) => void)(new Error("failed"), "", "dirty worktree");
+        return {} as never;
+      }) as never);
+
+    await expect(issueCommand(["start", "ENG-1"], teamCtx)).rejects.toMatchObject({
+      code: "UNKNOWN",
+      message: expect.stringContaining("Issue was started"),
+    });
+    expect(mockedGql).toHaveBeenCalledTimes(2);
   });
 });

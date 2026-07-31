@@ -477,7 +477,7 @@ async function updateIssue(args: string[], ctx?: LinearContext): Promise<string>
   rejectUnknownFlags(args.slice(1), "issue update", UPDATE_FLAGS, {
     "--status": "--status was renamed; use --state instead",
   });
-  const ref = normalizeIssueRef(requireRef(args, "issue id"), ctx);
+  const ref = normalizeIssueRef(requireRef(args, "issue id", UPDATE_FLAGS), ctx);
   const core = await fetchIssueCore(ref);
   const team: ResolvedTeam = { id: core.team.id, key: core.team.key, name: core.team.name };
 
@@ -630,7 +630,10 @@ function noopResult(core: IssueCore, message: string): Record<string, unknown> {
 
 async function commentOnIssue(args: string[], ctx?: LinearContext): Promise<string> {
   rejectUnknownFlags(args.slice(1), "issue comment", ["--body", "--body-file", "--reply-to"]);
-  const ref = normalizeIssueRef(requireRef(args, "issue id"), ctx);
+  const ref = normalizeIssueRef(
+    requireRef(args, "issue id", ["--body", "--body-file", "--reply-to"]),
+    ctx,
+  );
   const replyTo = takeFlag(args, "--reply-to");
   const body = takeBody(args, { required: true, valueBoundaryFlags: ["--reply-to"] });
   const core = await fetchIssueCore(ref);
@@ -783,10 +786,25 @@ async function checkoutBranch(branch: string): Promise<string> {
   const exists = await git(["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]);
   if (exists.ok) {
     const checkout = await git(["checkout", branch]);
-    return checkout.ok ? "checked out existing" : `checkout failed: ${firstLine(checkout.stderr)}`;
+    if (!checkout.ok) {
+      throw branchError(branch, "checkout", checkout.stderr);
+    }
+    return "checked out existing";
   }
   const create = await git(["checkout", "-b", branch]);
-  return create.ok ? "created" : `create failed: ${firstLine(create.stderr)}`;
+  if (!create.ok) {
+    throw branchError(branch, "create", create.stderr);
+  }
+  return "created";
+}
+
+function branchError(branch: string, action: "checkout" | "create", stderr: string): AxiError {
+  const detail = firstLine(stderr) || "git returned a non-zero exit status";
+  return new AxiError(
+    `Issue was started, but Git could not ${action} branch ${branch}: ${detail}`,
+    "UNKNOWN",
+    ["Resolve the Git working-tree error, then rerun `linear-axi issue start <id>`"],
+  );
 }
 
 function firstLine(text: string): string {
@@ -804,8 +822,8 @@ async function branchName(args: string[], ctx?: LinearContext): Promise<string> 
 // ---------------------------------------------------------------------------
 // shared helpers + dispatcher
 
-function requireRef(args: string[], label: string): string {
-  const ref = getPositional(args, 1);
+function requireRef(args: string[], label: string, valueTakingFlags: readonly string[] = []): string {
+  const ref = getPositional(args, 1, valueTakingFlags);
   if (!ref) {
     throw new AxiError(`Missing ${label}`, "VALIDATION_ERROR", [
       "Pass an issue identifier like ABC-123",

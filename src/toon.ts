@@ -128,8 +128,17 @@ export function renderDetail(label: string, item: Record<string, any>, schema: F
 /** Render help suggestions (manual formatting — encode() inlines primitive arrays). */
 export function renderHelp(lines: string[]): string {
   if (lines.length === 0) return "";
-  const indented = lines.map((l) => `  ${l}`).join("\n");
+  const indented = lines.map((line) => `  ${escapeControlCharacters(line)}`).join("\n");
   return `help[${lines.length}]:\n${indented}`;
+}
+
+function escapeControlCharacters(value: string): string {
+  return value.replace(/[\u0000-\u001f\u007f]/g, (character) => {
+    if (character === "\n") return "\\n";
+    if (character === "\r") return "\\r";
+    if (character === "\t") return "\\t";
+    return `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`;
+  });
 }
 
 /** Render an error in TOON format. */

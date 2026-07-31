@@ -191,7 +191,7 @@ const UPDATE_FLAGS = ["--title", "--body", "--body-file"];
 
 async function updateDoc(args: string[], ctx?: LinearContext): Promise<string> {
   rejectUnknownFlags(args.slice(1), "doc update", UPDATE_FLAGS);
-  const id = requireId(args);
+  const id = requireId(args, UPDATE_FLAGS);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- mutation input is dynamic
   const input: Record<string, any> = {};
@@ -230,8 +230,8 @@ async function updateDoc(args: string[], ctx?: LinearContext): Promise<string> {
 // ---------------------------------------------------------------------------
 // shared helpers + dispatcher
 
-function requireId(args: string[]): string {
-  const id = getPositional(args, 1);
+function requireId(args: string[], valueTakingFlags: readonly string[] = []): string {
+  const id = getPositional(args, 1, valueTakingFlags);
   if (!id) {
     throw new AxiError("Missing document id", "VALIDATION_ERROR", [
       "Pass a document id (see `linear-axi doc list`)",

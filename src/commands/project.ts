@@ -262,7 +262,7 @@ const UPDATE_FLAGS = ["--name", "--body", "--body-file", "--lead", "--state", "-
 
 async function updateProject(args: string[], ctx?: LinearContext): Promise<string> {
   rejectUnknownFlags(args.slice(1), "project update", UPDATE_FLAGS);
-  const ref = requireName(args);
+  const ref = requireName(args, UPDATE_FLAGS);
   const resolved = await resolveProject(ref);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- mutation input is dynamic
@@ -315,8 +315,8 @@ async function updateProject(args: string[], ctx?: LinearContext): Promise<strin
 // ---------------------------------------------------------------------------
 // shared helpers + dispatcher
 
-function requireName(args: string[]): string {
-  const ref = getPositional(args, 1);
+function requireName(args: string[], valueTakingFlags: readonly string[] = []): string {
+  const ref = getPositional(args, 1, valueTakingFlags);
   if (!ref) {
     throw new AxiError("Missing project name or uuid", "VALIDATION_ERROR", [
       "Run `linear-axi project list` to see available projects",

@@ -3,7 +3,7 @@ import { getFlag, getPositional, rejectUnknownFlags } from "../args.js";
 import { AxiError } from "../errors.js";
 import { formatCountLine } from "../format.js";
 import { gqlQuery } from "../linear.js";
-import { getSuggestions } from "../suggestions.js";
+import { getSuggestions, shellArg } from "../suggestions.js";
 import {
   custom,
   field,
@@ -36,7 +36,7 @@ export async function searchCommand(args: string[], ctx?: LinearContext): Promis
 
   rejectUnknownFlags(args, "search", ["--limit"]);
 
-  const term = getPositional(args, 0);
+  const term = getPositional(args, 0, ["--limit"]);
   if (!term) {
     throw new AxiError("Search text is required", "VALIDATION_ERROR", [
       'Run `linear-axi search "login bug"`',
@@ -70,7 +70,7 @@ export async function searchCommand(args: string[], ctx?: LinearContext): Promis
 
   const hints: string[] = [];
   if (results.length > 0 && data.searchIssues.pageInfo.hasNextPage) {
-    hints.push(`Run \`linear-axi search "${term}" --limit ${Math.min(limit * 2, 250)}\` to see more`);
+    hints.push(`Run \`linear-axi search ${shellArg(term)} --limit ${Math.min(limit * 2, 250)}\` to see more`);
   }
   blocks.push(
     renderHelp([...hints, ...getSuggestions({ domain: "search", action: "search", isEmpty: results.length === 0, ctx })]),

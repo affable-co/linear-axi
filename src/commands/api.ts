@@ -29,7 +29,7 @@ export async function apiCommand(args: string[], _ctx?: LinearContext): Promise<
     }
   }
 
-  let query = getPositional(args, 0);
+  let query = getPositional(args, 0, ["--input"]);
   if (!query) {
     // Never hang waiting on an interactive terminal.
     if (isStdinTTY()) {

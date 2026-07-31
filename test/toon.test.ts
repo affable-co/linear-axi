@@ -232,6 +232,12 @@ describe("renderHelp", () => {
   it("returns empty for no lines", () => {
     expect(renderHelp([])).toBe("");
   });
+
+  it("escapes control characters so values cannot inject help rows", () => {
+    expect(renderHelp(["Run safe\n  Run injected\u001b"])).toBe(
+      "help[1]:\n  Run safe\\n  Run injected\\u001b",
+    );
+  });
 });
 
 describe("renderError", () => {

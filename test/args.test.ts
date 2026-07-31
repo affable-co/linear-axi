@@ -25,8 +25,14 @@ describe("getFlag", () => {
     expect(getFlag(["--state", "open"], "--team")).toBeUndefined();
   });
 
-  it("returns undefined when the flag is last with no value", () => {
-    expect(getFlag(["--state", "open", "--team"], "--team")).toBeUndefined();
+  it("rejects an empty equals-form value", () => {
+    expect(() => getFlag(["--team="], "--team")).toThrow("--team requires a value");
+  });
+
+  it("rejects a flag with no value", () => {
+    expect(() => getFlag(["--state", "open", "--team"], "--team")).toThrow(
+      "--team requires a value",
+    );
   });
 
   it("does not modify the args array", () => {
@@ -53,6 +59,16 @@ describe("takeFlag", () => {
     const args = ["--state", "open"];
     expect(takeFlag(args, "--team")).toBeUndefined();
     expect(args).toEqual(["--state", "open"]);
+  });
+
+  it("rejects another flag as the value", () => {
+    const args = ["--title", "--priority", "high"];
+    expect(() => takeFlag(args, "--title")).toThrow("--title requires a value");
+    expect(args).toEqual(["--title", "--priority", "high"]);
+  });
+
+  it("allows non-flag text that begins with two hyphens", () => {
+    expect(getFlag(["--body", "-- heading"], "--body")).toBe("-- heading");
   });
 });
 
@@ -93,8 +109,10 @@ describe("getAllFlags", () => {
   it("returns empty when absent", () => {
     expect(getAllFlags(["--state", "open"], "--label")).toEqual([]);
   });
-  it("skips a trailing flag with no value", () => {
-    expect(getAllFlags(["--label", "bug", "--label"], "--label")).toEqual(["bug"]);
+  it("rejects a trailing flag with no value", () => {
+    expect(() => getAllFlags(["--label", "bug", "--label"], "--label")).toThrow(
+      "--label requires a value",
+    );
   });
 });
 
@@ -110,6 +128,14 @@ describe("getPositional", () => {
   });
   it("returns undefined for empty args", () => {
     expect(getPositional([], 0)).toBeUndefined();
+  });
+
+  it("skips values owned by flags before the positional", () => {
+    expect(getPositional(["--title", "ABC-1", "DEF-2"], 0, ["--title"])).toBe("DEF-2");
+  });
+
+  it("does not treat a boolean flag as owning the next positional", () => {
+    expect(getPositional(["--full", "ABC-1"], 0, [])).toBe("ABC-1");
   });
 });
 
@@ -214,9 +240,20 @@ describe("rejectUnknownFlags", () => {
     expect(() => rejectUnknownFlags(["--state=open"], "issue list", allowed)).not.toThrow();
   });
 
-  it("skips a space-form flag value that itself starts with --", () => {
-    // --assignee consumes the following token as its value, so --weird is not validated.
-    expect(() => rejectUnknownFlags(["--assignee", "--weird"], "issue list", allowed)).not.toThrow();
+  it("rejects a following flag as a missing value", () => {
+    expect(() => rejectUnknownFlags(["--assignee", "--weird"], "issue list", allowed)).toThrow(
+      "--assignee requires a value",
+    );
+  });
+
+  it("does not let boolean flags consume a positional", () => {
+    expect(() => rejectUnknownFlags(["--full", "ABC-1"], "issue view", ["--full"])).not.toThrow();
+  });
+
+  it("rejects values attached to boolean flags", () => {
+    expect(() => rejectUnknownFlags(["--full=yes"], "issue view", ["--full"])).toThrow(
+      "--full does not take a value",
+    );
   });
 
   it("still rejects an unknown flag that follows a consumed value", () => {

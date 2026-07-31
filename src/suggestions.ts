@@ -23,6 +23,13 @@ type SuggestionEntry = {
   lines: (c: SuggestionContext) => string[];
 };
 
+/** Quote an arbitrary value as one POSIX-shell argument. */
+export function shellArg(value: string | number): string {
+  const stringValue = String(value);
+  if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(stringValue)) return stringValue;
+  return `'${stringValue.replace(/'/g, `'\\''`)}'`;
+}
+
 /**
  * Append ` --team KEY` only when the team came from an explicit flag or env —
  * auto-detected sources (.linear.toml, git branch) re-resolve on the next
@@ -31,7 +38,7 @@ type SuggestionEntry = {
 function teamFlag(c: SuggestionContext): string {
   const team = c.ctx?.team;
   if (team && (team.source === "flag" || team.source === "env")) {
-    return ` --team ${team.team}`;
+    return ` --team ${shellArg(team.team)}`;
   }
   return "";
 }
@@ -67,18 +74,18 @@ const table: SuggestionEntry[] = [
   {
     match: (c) => c.domain === "issue" && c.action === "view" && OPEN_TYPES.has(c.state ?? ""),
     lines: (c) => [
-      `Run \`linear-axi issue comment ${c.id} --body "..."\` to comment`,
-      `Run \`linear-axi issue update ${c.id} --state <state>\` to change state`,
-      `Run \`linear-axi issue start ${c.id}\` to assign yourself and create the git branch`,
-      `Run \`linear-axi issue close ${c.id}\` to close`,
+      `Run \`linear-axi issue comment ${shellArg(c.id ?? "<id>")} --body "..."\` to comment`,
+      `Run \`linear-axi issue update ${shellArg(c.id ?? "<id>")} --state <state>\` to change state`,
+      `Run \`linear-axi issue start ${shellArg(c.id ?? "<id>")}\` to assign yourself and create the git branch`,
+      `Run \`linear-axi issue close ${shellArg(c.id ?? "<id>")}\` to close`,
     ],
   },
   // Issue view — completed/canceled
   {
     match: (c) => c.domain === "issue" && c.action === "view",
     lines: (c) => [
-      `Run \`linear-axi issue reopen ${c.id}\` to reopen`,
-      `Run \`linear-axi issue comment ${c.id} --body "..."\` to comment`,
+      `Run \`linear-axi issue reopen ${shellArg(c.id ?? "<id>")}\` to reopen`,
+      `Run \`linear-axi issue comment ${shellArg(c.id ?? "<id>")} --body "..."\` to comment`,
     ],
   },
 
@@ -86,31 +93,31 @@ const table: SuggestionEntry[] = [
   {
     match: (c) => c.domain === "issue" && c.action === "create",
     lines: (c) => [
-      `Run \`linear-axi issue view ${c.id}\` to see the full issue`,
-      `Run \`linear-axi issue start ${c.id}\` to assign yourself and create the git branch`,
+      `Run \`linear-axi issue view ${shellArg(c.id ?? "<id>")}\` to see the full issue`,
+      `Run \`linear-axi issue start ${shellArg(c.id ?? "<id>")}\` to assign yourself and create the git branch`,
     ],
   },
   {
     match: (c) =>
       c.domain === "issue" && ["update", "close", "reopen"].includes(c.action),
-    lines: (c) => [`Run \`linear-axi issue view ${c.id}\` to see the updated issue`],
+    lines: (c) => [`Run \`linear-axi issue view ${shellArg(c.id ?? "<id>")}\` to see the updated issue`],
   },
   {
     match: (c) => c.domain === "issue" && c.action === "comment",
-    lines: (c) => [`Run \`linear-axi issue comments ${c.id}\` to see the thread`],
+    lines: (c) => [`Run \`linear-axi issue comments ${shellArg(c.id ?? "<id>")}\` to see the thread`],
   },
   {
     match: (c) => c.domain === "issue" && c.action === "comments",
     lines: (c) => [
-      `Run \`linear-axi issue comment ${c.id} --body "..."\` to comment`,
-      `Run \`linear-axi issue comment ${c.id} --body "..." --reply-to <comment-id>\` to reply in a thread`,
+      `Run \`linear-axi issue comment ${shellArg(c.id ?? "<id>")} --body "..."\` to comment`,
+      `Run \`linear-axi issue comment ${shellArg(c.id ?? "<id>")} --body "..." --reply-to <comment-id>\` to reply in a thread`,
     ],
   },
   {
     match: (c) => c.domain === "issue" && c.action === "start",
     lines: (c) => [
-      `Run \`linear-axi issue view ${c.id}\` to see the issue`,
-      `Run \`linear-axi issue close ${c.id}\` when the work ships`,
+      `Run \`linear-axi issue view ${shellArg(c.id ?? "<id>")}\` to see the issue`,
+      `Run \`linear-axi issue close ${shellArg(c.id ?? "<id>")}\` when the work ships`,
     ],
   },
 
@@ -128,11 +135,11 @@ const table: SuggestionEntry[] = [
   },
   {
     match: (c) => c.domain === "project" && c.action === "view",
-    lines: (c) => [`Run \`linear-axi issue list --project "${c.id}"\` to see its issues`],
+    lines: (c) => [`Run \`linear-axi issue list --project ${shellArg(c.id ?? "<name>")}\` to see its issues`],
   },
   {
     match: (c) => c.domain === "project" && ["create", "update"].includes(c.action),
-    lines: (c) => [`Run \`linear-axi project view "${c.id}"\` to see the project`],
+    lines: (c) => [`Run \`linear-axi project view ${shellArg(c.id ?? "<name>")}\` to see the project`],
   },
 
   // Cycles
@@ -146,7 +153,7 @@ const table: SuggestionEntry[] = [
   {
     match: (c) => c.domain === "cycle" && c.action === "view",
     lines: (c) => [
-      `Run \`linear-axi issue list --cycle ${c.id ?? "current"}${teamFlag(c)}\` to see its issues`,
+      `Run \`linear-axi issue list --cycle ${shellArg(c.id ?? "current")}${teamFlag(c)}\` to see its issues`,
     ],
   },
 
@@ -158,8 +165,8 @@ const table: SuggestionEntry[] = [
   {
     match: (c) => c.domain === "team" && c.action === "view",
     lines: (c) => [
-      `Run \`linear-axi issue list --team ${c.id}\` to see the team's issues`,
-      `Run \`linear-axi cycle view current --team ${c.id}\` for the active cycle`,
+      `Run \`linear-axi issue list --team ${shellArg(c.id ?? "<key>")}\` to see the team's issues`,
+      `Run \`linear-axi cycle view current --team ${shellArg(c.id ?? "<key>")}\` for the active cycle`,
     ],
   },
   {
@@ -186,7 +193,7 @@ const table: SuggestionEntry[] = [
   },
   {
     match: (c) => c.domain === "doc" && ["create", "update"].includes(c.action),
-    lines: (c) => [`Run \`linear-axi doc view ${c.id}\` to read the document`],
+    lines: (c) => [`Run \`linear-axi doc view ${shellArg(c.id ?? "<id>")}\` to read the document`],
   },
 
   // Search

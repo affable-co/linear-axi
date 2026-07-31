@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getSuggestions } from "../src/suggestions.js";
+import { getSuggestions, shellArg } from "../src/suggestions.js";
 import type { LinearContext } from "../src/context.js";
 
 function ctxWith(source: "flag" | "env" | "config" | "branch", team = "ENG"): LinearContext {
@@ -69,5 +69,15 @@ describe("getSuggestions", () => {
 
   it("returns an empty array for an unmatched domain", () => {
     expect(getSuggestions({ domain: "nonexistent", action: "list" })).toEqual([]);
+  });
+
+  it("shell-quotes remote names embedded in runnable commands", () => {
+    const lines = getSuggestions({
+      domain: "project",
+      action: "view",
+      id: "$(touch /tmp/pwned)'s project",
+    });
+    expect(lines[0]).toContain(shellArg("$(touch /tmp/pwned)'s project"));
+    expect(lines[0]).not.toContain('--project "$(touch');
   });
 });

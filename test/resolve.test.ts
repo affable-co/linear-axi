@@ -239,6 +239,17 @@ describe("resolveProject", () => {
     expect(mockedGql).not.toHaveBeenCalled();
   });
 
+  it("rejects ambiguous project names and lists their ids", async () => {
+    mockedGql.mockResolvedValue({
+      projects: { nodes: [{ id: "p1", name: "Website" }, { id: "p2", name: "Website" }] },
+    });
+
+    await expect(resolveProject("Website")).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+      message: expect.stringContaining("p1"),
+    });
+  });
+
   it("throws NOT_FOUND with a suggestion when unknown", async () => {
     mockedGql.mockResolvedValue({ projects: { nodes: [] } });
     try {

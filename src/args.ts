@@ -4,17 +4,36 @@ function flagEqualsPrefix(flag: string): string {
   return `${flag}=`;
 }
 
+function isLongFlagToken(value: string): boolean {
+  return /^--[A-Za-z0-9][A-Za-z0-9-]*(?:=.*)?$/.test(value);
+}
+
+function requireFlagValue(args: string[], index: number, flag: string): string {
+  const value = args[index + 1];
+  if (value === undefined || isLongFlagToken(value)) {
+    throw new AxiError(`${flag} requires a value`, "VALIDATION_ERROR");
+  }
+  return value;
+}
+
+function requireEqualsValue(arg: string, flag: string): string {
+  const value = arg.slice(flagEqualsPrefix(flag).length);
+  if (value === "") {
+    throw new AxiError(`${flag} requires a value`, "VALIDATION_ERROR");
+  }
+  return value;
+}
+
 /** Get a flag's value from --flag value or --flag=value without modifying args. */
 export function getFlag(args: string[], name: string): string | undefined {
   const equalsPrefix = flagEqualsPrefix(name);
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === name) {
-      if (i + 1 >= args.length) return undefined;
-      return args[i + 1];
+      return requireFlagValue(args, i, name);
     }
     if (arg.startsWith(equalsPrefix)) {
-      return arg.slice(equalsPrefix.length);
+      return requireEqualsValue(arg, name);
     }
   }
   return undefined;
@@ -26,12 +45,12 @@ export function takeFlag(args: string[], flag: string): string | undefined {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === flag) {
-      const val = args[i + 1];
+      const val = requireFlagValue(args, i, flag);
       args.splice(i, 2);
       return val;
     }
     if (arg.startsWith(equalsPrefix)) {
-      const val = arg.slice(equalsPrefix.length);
+      const val = requireEqualsValue(arg, flag);
       args.splice(i, 1);
       return val;
     }
@@ -58,20 +77,31 @@ export function getAllFlags(args: string[], flag: string): string[] {
   const equalsPrefix = flagEqualsPrefix(flag);
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if (arg === flag && i + 1 < args.length) {
-      result.push(args[i + 1]);
+    if (arg === flag) {
+      result.push(requireFlagValue(args, i, flag));
       i++;
     } else if (arg.startsWith(equalsPrefix)) {
-      result.push(arg.slice(equalsPrefix.length));
+      result.push(requireEqualsValue(arg, flag));
     }
   }
   return result;
 }
 
-/** Get the first positional arg (non-flag) starting from startIndex. */
-export function getPositional(args: string[], startIndex: number): string | undefined {
+/** Get the first positional arg, skipping values owned by known value-taking flags. */
+export function getPositional(
+  args: string[],
+  startIndex: number,
+  valueTakingFlags: readonly string[] = [],
+): string | undefined {
+  const valueTaking = new Set(valueTakingFlags);
   for (let i = startIndex; i < args.length; i++) {
-    if (!args[i].startsWith("--")) return args[i];
+    const arg = args[i];
+    const name = arg.includes("=") ? arg.slice(0, arg.indexOf("=")) : arg;
+    if (valueTaking.has(name) && arg === name) {
+      i++;
+      continue;
+    }
+    if (!arg.startsWith("--")) return arg;
   }
   return undefined;
 }
@@ -113,15 +143,29 @@ export function rejectUnknownFlags(
   aliases: FlagAliases = {},
 ): void {
   const allowedSet = new Set([...allowed, "--help"]);
-  const valueTaking = new Set(allowed);
+  const booleanFlags = new Set([
+    "--help",
+    "--full",
+    "--comments",
+    "--cancel",
+    "--no-branch",
+    "--all",
+  ]);
+  const valueTaking = new Set(allowed.filter((flag) => !booleanFlags.has(flag)));
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (!arg.startsWith("--")) continue;
     const name = arg.includes("=") ? arg.slice(0, arg.indexOf("=")) : arg;
     if (allowedSet.has(name)) {
-      // Skip the flag's value in space-separated form so values that start
-      // with -- (rare) are not themselves validated.
-      if (arg === name && valueTaking.has(name)) i++;
+      if (booleanFlags.has(name) && arg !== name) {
+        throw new AxiError(`${name} does not take a value`, "VALIDATION_ERROR");
+      }
+      if (arg === name && valueTaking.has(name)) {
+        requireFlagValue(args, i, name);
+        i++;
+      } else if (valueTaking.has(name)) {
+        requireEqualsValue(arg, name);
+      }
       continue;
     }
     if (name in aliases) {

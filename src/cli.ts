@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runAxiCli } from "axi-sdk-js";
+import { AxiError } from "./errors.js";
 import { resolveContext, type LinearContext } from "./context.js";
 import { homeCommand } from "./commands/home.js";
 import { issueCommand, ISSUE_HELP } from "./commands/issue.js";
@@ -119,7 +120,7 @@ function withTeamContext(handler: CommandFn): CommandFn {
   return (args, ctx) => handler(parseTeamFlag(args).strippedArgs, ctx);
 }
 
-function parseTeamFlag(args: string[]): {
+export function parseTeamFlag(args: string[]): {
   teamFlag: string | undefined;
   strippedArgs: string[];
 } {
@@ -128,14 +129,22 @@ function parseTeamFlag(args: string[]): {
 
   for (let index = 0; index < args.length; index++) {
     const arg = args[index];
-    if (arg === "--team" && index + 1 < args.length) {
-      teamFlag = args[index + 1];
+    if (arg === "--team") {
+      const value = args[index + 1];
+      if (value === undefined || /^--[A-Za-z0-9][A-Za-z0-9-]*(?:=.*)?$/.test(value)) {
+        throw new AxiError("--team requires a value", "VALIDATION_ERROR");
+      }
+      teamFlag = value;
       index++;
       continue;
     }
 
-    if (arg.startsWith("--team=") && arg.length > "--team=".length) {
-      teamFlag = arg.slice("--team=".length);
+    if (arg.startsWith("--team=")) {
+      const value = arg.slice("--team=".length);
+      if (!value) {
+        throw new AxiError("--team requires a value", "VALIDATION_ERROR");
+      }
+      teamFlag = value;
       continue;
     }
 

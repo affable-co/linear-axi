@@ -11,6 +11,7 @@ import { mapLinearError, networkError, type LinearGraphQLError } from "./errors.
  */
 
 export const LINEAR_ENDPOINT = "https://api.linear.app/graphql";
+export const LINEAR_REQUEST_TIMEOUT_MS = 30_000;
 
 export interface GqlResult<T> {
   data?: T;
@@ -54,8 +55,12 @@ export async function gqlRaw<T>(
         Authorization: apiKey.startsWith("Bearer ") ? apiKey : formatAuthHeader(apiKey),
       },
       body: JSON.stringify(variables ? { query, variables } : { query }),
+      signal: AbortSignal.timeout(LINEAR_REQUEST_TIMEOUT_MS),
     });
   } catch (error) {
+    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+      throw networkError(`request timed out after ${LINEAR_REQUEST_TIMEOUT_MS / 1000}s`);
+    }
     throw networkError(error instanceof Error ? error.message : String(error));
   }
 
