@@ -14,21 +14,31 @@ import { authRequiredError } from "./errors.js";
  * Never prompts. Throws AUTH_REQUIRED with setup instructions when absent.
  */
 
-let cachedKey: string | undefined;
+export interface ApiCredential {
+  apiKey: string;
+  source: "environment" | "credentials_file";
+}
+
+let cachedCredential: ApiCredential | undefined;
 
 export function resolveApiKey(): string {
-  if (cachedKey) return cachedKey;
+  return resolveApiCredential().apiKey;
+}
+
+/** Resolve the key together with a non-secret description of its source. */
+export function resolveApiCredential(): ApiCredential {
+  if (cachedCredential) return cachedCredential;
 
   const envKey = process.env["LINEAR_API_KEY"];
   if (envKey && envKey.trim()) {
-    cachedKey = envKey.trim();
-    return cachedKey;
+    cachedCredential = { apiKey: envKey.trim(), source: "environment" };
+    return cachedCredential;
   }
 
   const fromFile = readCredentialsFile(join(credentialsDir(), "credentials.toml"));
   if (fromFile) {
-    cachedKey = fromFile;
-    return cachedKey;
+    cachedCredential = { apiKey: fromFile, source: "credentials_file" };
+    return cachedCredential;
   }
 
   throw authRequiredError();
@@ -36,7 +46,7 @@ export function resolveApiKey(): string {
 
 /** Test seam: clear the module-level key cache. */
 export function clearApiKeyCache(): void {
-  cachedKey = undefined;
+  cachedCredential = undefined;
 }
 
 function credentialsDir(): string {

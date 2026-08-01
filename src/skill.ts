@@ -4,12 +4,10 @@ import { DESCRIPTION, TOP_HELP } from "./cli.js";
 // Kept terse and outcome-focused so it fires on "needs Linear" intents.
 export const SKILL_DESCRIPTION =
   "Operate Linear through the linear-axi CLI - issues, projects, cycles, teams, workflow states, " +
-  "labels, users, documents, search, and raw GraphQL access. " +
+  "labels, users, documents, search, authentication checks, and raw GraphQL access. " +
   "Use whenever a task touches Linear: listing, filing, or updating issues, commenting, moving issues " +
   "through workflow states, starting work on an issue (git branch), checking cycles or project progress, " +
   "or searching the workspace.";
-
-export const SKILL_AUTHOR = "Tamas Perlaky";
 
 function yamlDoubleQuote(value: string): string {
   return JSON.stringify(value);
@@ -39,8 +37,6 @@ export function createSkillMarkdown(): string {
   return `---
 name: linear-axi
 description: ${yamlDoubleQuote(SKILL_DESCRIPTION)}
-user-invocable: false
-author: ${SKILL_AUTHOR}
 ---
 
 # linear-axi
@@ -50,21 +46,18 @@ ${DESCRIPTION}
 You do not need linear-axi installed globally - invoke it with \`npx -y linear-axi <command>\`.
 If linear-axi output shows a follow-up command starting with \`linear-axi\`, run it as \`npx -y linear-axi ...\` instead.
 
-linear-axi requires a Linear API key in the \`LINEAR_API_KEY\` environment variable (create one at https://linear.app/settings/account/security). Keys stored by schpet/linear-cli in \`~/.config/linear/credentials.toml\` are detected automatically. If a command fails with \`AUTH_REQUIRED\`, ask the user to set \`LINEAR_API_KEY\` themselves.
-
-## When to use
-
-Use linear-axi whenever a task touches Linear: listing, filing, editing, closing, or reopening issues; commenting on issues or reading comment threads; starting work on an issue (assigns you and creates the git branch); checking cycle or project progress; managing labels and workflow states; reading or writing documents; searching the workspace; or calling the Linear GraphQL API directly.
+linear-axi requires a Linear API key in the \`LINEAR_API_KEY\` environment variable (create one at https://linear.app/settings/account/security). Keys stored by schpet/linear-cli in \`~/.config/linear/credentials.toml\` are detected automatically. Run \`npx -y linear-axi auth status\` to verify authentication; do not guess or invent other login commands. If it fails with \`AUTH_REQUIRED\`, ask the user to set \`LINEAR_API_KEY\` themselves.
 
 ## Workflow
 
-1. Run \`npx -y linear-axi\` with no arguments for a dashboard - your active issues and suggested next commands.
-2. Drill in command-first: \`issue list\`, \`issue view ABC-123\`, \`project view <name>\`, \`cycle view current --team <key>\`, and so on.
-3. Issues accept identifiers everywhere (\`ABC-123\`, case-insensitive); teams accept keys or names; states, labels, projects, and cycles accept names; assignees accept \`me\`, an email, or a display name.
-4. Scope to a team by placing \`--team <key>\` AFTER the command. Without it, the team comes from \`LINEAR_TEAM\`, a \`.linear.toml\` \`team_id\`, or the current git branch's issue identifier.
-5. Move work along with \`issue start ABC-123\` (assigns you, moves to started, creates the git branch), then \`issue close ABC-123\` when it ships.
-6. Filter lists tightly (\`--state\`, \`--assignee me\`, \`--label\`, \`--updated-since 2w\`) - narrow queries cost fewer tokens than wide ones.
-7. Every response ends with contextual next-step hints under \`help:\` - follow them.
+1. Run \`npx -y linear-axi auth status\` when authentication is unknown or needs verification.
+2. Run \`npx -y linear-axi\` with no arguments for a dashboard - your active issues and suggested next commands.
+3. Drill in command-first: \`issue list\`, \`issue view ABC-123\`, \`project view <name>\`, \`cycle view current --team <key>\`, and so on.
+4. Issues accept identifiers everywhere (\`ABC-123\`, case-insensitive); teams accept keys or names; states, labels, projects, and cycles accept names; assignees accept \`me\`, an email, or a display name.
+5. Scope to a team by placing \`--team <key>\` AFTER the command. Without it, the team comes from \`LINEAR_TEAM\`, a \`.linear.toml\` \`team_id\`, or the current git branch's issue identifier.
+6. Move work along with \`issue start ABC-123\` (assigns you, moves to started, creates the git branch), then \`issue close ABC-123\` when it ships.
+7. Filter lists tightly (\`--state\`, \`--assignee me\`, \`--label\`, \`--updated-since 2w\`) - narrow queries cost fewer tokens than wide ones.
+8. Every response ends with contextual next-step hints under \`help:\` - follow them.
 
 ## Commands
 
@@ -87,5 +80,14 @@ Run \`npx -y linear-axi --help\` for global flags, or \`npx -y linear-axi <comma
 - States accept a name ("In Review") or a type (\`triage\`, \`backlog\`, \`unstarted\`, \`started\`, \`completed\`, \`canceled\`).
 - \`--updated-since\` accepts friendly durations: \`2h\`, \`3d\`, \`2w\`, \`1m\`, \`1y\`, or an ISO date.
 - Use \`api\` for anything the dedicated commands do not cover, e.g. \`npx -y linear-axi api 'query { viewer { email } }'\`.
+`;
+}
+
+/** Render Codex-facing UI metadata bundled with the skill. */
+export function createSkillOpenAiYaml(): string {
+  return `interface:
+  display_name: "Linear AXI"
+  short_description: "Operate Linear issues, projects, and workflows"
+  default_prompt: "Use $linear-axi to inspect and manage work in Linear."
 `;
 }

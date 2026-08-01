@@ -2,7 +2,12 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { readCredentialsFile, resolveApiKey, clearApiKeyCache } from "../src/auth.js";
+import {
+  readCredentialsFile,
+  resolveApiCredential,
+  resolveApiKey,
+  clearApiKeyCache,
+} from "../src/auth.js";
 import { AxiError } from "../src/errors.js";
 
 function withTempDir<T>(fn: (dir: string) => T): T {
@@ -91,6 +96,14 @@ describe("resolveApiKey", () => {
     expect(resolveApiKey()).toBe("lin_api_env");
   });
 
+  it("reports the environment credential source without exposing it through metadata", () => {
+    process.env["LINEAR_API_KEY"] = "lin_api_env";
+    expect(resolveApiCredential()).toEqual({
+      apiKey: "lin_api_env",
+      source: "environment",
+    });
+  });
+
   it("throws AUTH_REQUIRED when no key is available anywhere", () =>
     withTempDir((emptyDir) => {
       // Point XDG at an empty dir so no real ~/.config credentials leak in.
@@ -115,5 +128,6 @@ describe("resolveApiKey", () => {
       );
       process.env["XDG_CONFIG_HOME"] = dir;
       expect(resolveApiKey()).toBe("lin_api_fromfile");
+      expect(resolveApiCredential().source).toBe("credentials_file");
     }));
 });

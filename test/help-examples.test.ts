@@ -11,6 +11,7 @@ import { DOC_HELP } from "../src/commands/doc.js";
 import { SEARCH_HELP } from "../src/commands/search.js";
 import { API_HELP } from "../src/commands/api.js";
 import { SETUP_HELP } from "../src/commands/setup.js";
+import { AUTH_HELP } from "../src/commands/auth.js";
 
 /**
  * Every HELP constant must contain an `examples:` section with at least two
@@ -43,4 +44,5 @@ describe("Help output includes examples for every command family", () => {
   assertHelpHasExamples("SEARCH_HELP", SEARCH_HELP);
   assertHelpHasExamples("API_HELP", API_HELP);
   assertHelpHasExamples("SETUP_HELP", SETUP_HELP);
+  assertHelpHasExamples("AUTH_HELP", AUTH_HELP);
 });

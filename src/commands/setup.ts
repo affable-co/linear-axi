@@ -1,6 +1,7 @@
 import { encode } from "@toon-format/toon";
 import { AxiError, installSessionStartHooks } from "axi-sdk-js";
 import type { LinearContext } from "../context.js";
+import { rejectUnknownFlags } from "../args.js";
 import { renderHelp, renderOutput } from "../toon.js";
 
 export const SETUP_HELP = `usage: linear-axi setup <subcommand>
@@ -17,8 +18,10 @@ export async function setupCommand(args: string[], _ctx?: LinearContext): Promis
 
   switch (sub) {
     case "hooks":
+      rejectUnknownFlags(args.slice(1), "setup hooks", []);
       return setupHooks();
     case "skill":
+      rejectUnknownFlags(args.slice(1), "setup skill", []);
       return setupSkill();
     default:
       throw new AxiError(`Unknown setup subcommand: ${sub}`, "VALIDATION_ERROR", [
@@ -45,12 +48,13 @@ function setupSkill(): string {
     encode({
       skill: {
         name: "linear-axi",
-        source: "skills/linear-axi/SKILL.md (bundled in this package)",
-        published: false,
+        source: "https://github.com/affable-co/linear-axi/tree/main/skills/linear-axi",
+        install: "npx skills add affable-co/linear-axi --skill linear-axi",
+        codex: "$skill-installer install https://github.com/affable-co/linear-axi/tree/main/skills/linear-axi",
       },
     }),
     renderHelp([
-      "This repo is not published yet — point your agent at the bundled skills/linear-axi/SKILL.md",
+      "Run the install command, then restart your agent so it discovers the skill",
     ]),
   ]);
 }

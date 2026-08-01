@@ -38,7 +38,7 @@ or pruning over appending.
 - Secrets never appear in argv or output. Never block on interactive stdin — if input is
   required and stdin is a TTY, throw immediately.
 - Regenerate the skill after changing TOP_HELP/DESCRIPTION: `pnpm run build:skill`
-  (CI-checkable with `--check`). Never hand-edit skills/linear-axi/SKILL.md.
+  (CI-checkable with `--check`). Never hand-edit generated files under skills/linear-axi.
 
 ## Publishing
 

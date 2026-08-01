@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   createSkillMarkdown,
+  createSkillOpenAiYaml,
   extractCommandsBlock,
-  SKILL_AUTHOR,
   SKILL_DESCRIPTION,
 } from "../src/skill.js";
 
@@ -21,11 +21,9 @@ describe("createSkillMarkdown", () => {
     expect(() => frontmatter(markdown)).not.toThrow();
   });
 
-  it("declares the skill name and author in the frontmatter", () => {
+  it("uses strict portable frontmatter with only name and description", () => {
     const fm = frontmatter(markdown);
-    expect(fm).toContain("name: linear-axi");
-    expect(fm).toContain(`author: ${SKILL_AUTHOR}`);
-    expect(fm).toContain("user-invocable: false");
+    expect(fm.split("\n").map((line) => line.split(":")[0])).toEqual(["name", "description"]);
   });
 
   it("has a description that mentions Linear", () => {
@@ -39,6 +37,7 @@ describe("createSkillMarkdown", () => {
 
   it("mentions the LINEAR_API_KEY requirement", () => {
     expect(markdown).toContain("LINEAR_API_KEY");
+    expect(markdown).toContain("auth status");
   });
 
   it("embeds the commands block from the top-level help", () => {
@@ -47,6 +46,16 @@ describe("createSkillMarkdown", () => {
 
   it("does not contain a slash-command argument placeholder", () => {
     expect(markdown).not.toContain("$ARGUMENTS");
+  });
+});
+
+describe("createSkillOpenAiYaml", () => {
+  const yaml = createSkillOpenAiYaml();
+
+  it("provides the recommended Codex interface fields", () => {
+    expect(yaml).toContain('display_name: "Linear AXI"');
+    expect(yaml).toContain("short_description:");
+    expect(yaml).toContain('default_prompt: "Use $linear-axi');
   });
 });
 

@@ -43,11 +43,11 @@ describe("setupCommand", () => {
     expect(out).toContain("Claude Code, Codex, OpenCode");
   });
 
-  it("prints skill install instructions pointing at the bundled SKILL.md", async () => {
+  it("prints repository-based skill install instructions", async () => {
     const out = await setupCommand(["skill"]);
     expect(mockedInstall).not.toHaveBeenCalled();
-    expect(out).toContain("skills/linear-axi/SKILL.md");
-    expect(out).toContain("published: false");
+    expect(out).toContain("npx skills add affable-co/linear-axi --skill linear-axi");
+    expect(out).toContain("github.com/affable-co/linear-axi/tree/main/skills/linear-axi");
   });
 
   it("rejects an unknown subcommand", async () => {

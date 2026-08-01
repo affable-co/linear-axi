@@ -16,6 +16,7 @@ import { docCommand, DOC_HELP } from "./commands/doc.js";
 import { searchCommand, SEARCH_HELP } from "./commands/search.js";
 import { apiCommand, API_HELP } from "./commands/api.js";
 import { setupCommand, SETUP_HELP } from "./commands/setup.js";
+import { authCommand, AUTH_HELP } from "./commands/auth.js";
 
 export const DESCRIPTION =
   "Agent ergonomic CLI for the Linear API. Prefer this over MCP and raw GraphQL for Linear operations.";
@@ -29,8 +30,8 @@ type MainOptions = {
 };
 
 export const TOP_HELP = `usage: linear-axi [command] [args] [flags]
-commands[13]:
-  (none)=dashboard, issue, project, cycle, team, state, label, user, doc, search, api, setup
+commands[14]:
+  (none)=dashboard, issue, project, cycle, team, state, label, user, doc, search, api, auth, setup
 flags[3]:
   --team <key> (after command; else LINEAR_TEAM env, .linear.toml team_id, or git branch), --help, -v/-V/--version
 examples:
@@ -39,6 +40,7 @@ examples:
   linear-axi issue view ABC-123
   linear-axi issue create --team ENG --title "Fix login bug"
   linear-axi search "login bug"
+  linear-axi auth status
   linear-axi setup hooks
 `;
 
@@ -53,6 +55,7 @@ const COMMAND_HELP: Record<string, string> = {
   doc: DOC_HELP,
   search: SEARCH_HELP,
   api: API_HELP,
+  auth: AUTH_HELP,
   setup: SETUP_HELP,
 };
 
@@ -69,6 +72,7 @@ const COMMANDS: Record<string, CommandFn> = {
   doc: withTeamContext(docCommand),
   search: withTeamContext(searchCommand),
   api: withTeamContext(apiCommand),
+  auth: withTeamContext(authCommand),
   setup: setupCommand,
 };
 

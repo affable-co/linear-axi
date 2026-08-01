@@ -11,6 +11,7 @@ hand-written minimal GraphQL that respects Linear's complexity budget.
 
 ```sh
 LINEAR_API_KEY=lin_api_... npx -y linear-axi
+LINEAR_API_KEY=lin_api_... npx -y linear-axi auth status
 ```
 
 Create a personal API key at <https://linear.app/settings/account/security>. If you already use
@@ -62,6 +63,7 @@ linear-axi user                 list, view
 linear-axi doc                  list, view, create, update
 linear-axi search <text>        full-text issue search
 linear-axi api '<graphql>'      raw GraphQL escape hatch
+linear-axi auth status          verify credentials and show the authenticated account
 linear-axi setup hooks          install SessionStart ambient context
 ```
 
@@ -77,6 +79,16 @@ Two complementary paths — install whichever fits (or both):
    for Claude Code, Codex, and OpenCode that shows the dashboard at the start of every session.
 2. **Agent Skill (on demand):** ships in `skills/linear-axi/` — loads only when a task touches
    Linear, no per-session token cost.
+
+Install the skill from GitHub with the cross-agent Skills CLI:
+
+```sh
+npx skills add affable-co/linear-axi --skill linear-axi
+```
+
+For Codex, you can instead ask `$skill-installer` to install
+`https://github.com/affable-co/linear-axi/tree/main/skills/linear-axi`. Restart the agent after
+installation so it discovers the skill.
 
 ## Conventions agents can rely on
 

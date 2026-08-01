@@ -1,0 +1,4 @@
+interface:
+  display_name: "Linear AXI"
+  short_description: "Operate Linear issues, projects, and workflows"
+  default_prompt: "Use $linear-axi to inspect and manage work in Linear."
