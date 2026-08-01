@@ -10,8 +10,8 @@ hand-written minimal GraphQL that respects Linear's complexity budget.
 ## Zero setup
 
 ```sh
-LINEAR_API_KEY=lin_api_... npx -y linear-axi
-LINEAR_API_KEY=lin_api_... npx -y linear-axi auth status
+LINEAR_API_KEY=lin_api_... npx -y @affable-co/linear-axi
+LINEAR_API_KEY=lin_api_... npx -y @affable-co/linear-axi auth status
 ```
 
 Create a personal API key at <https://linear.app/settings/account/security>. If you already use
@@ -108,6 +108,22 @@ pnpm test             # vitest
 pnpm run dev -- issue list   # run from source
 pnpm run build:skill  # regenerate skills/linear-axi/SKILL.md (--check in CI)
 ```
+
+## Publishing
+
+The Agent Skill and CLI use separate release channels. Merging changes under
+`skills/linear-axi/` to `main` publishes a new GitHub-backed skill revision. Publishing a GitHub
+Release tagged `v<package version>` runs `.github/workflows/publish.yml`, verifies the generated
+skill and test suite, and publishes the CLI as `@affable-co/linear-axi` on npm.
+
+For the first release, add a one-time `NPM_TOKEN` repository secret from an npm account authorized
+for the `@affable-co` scope. After that release creates the package, configure npm Trusted
+Publishing for organization `affable-co`, repository `linear-axi`, workflow `publish.yml`, with
+`npm publish` allowed, then delete the secret. Subsequent releases authenticate through GitHub
+OIDC and do not require an npm token.
+
+For each release, update `package.json`, regenerate the skill when its guidance changed, merge to
+`main`, and create a GitHub Release whose tag exactly matches the version, such as `v0.1.0`.
 
 ## License
 

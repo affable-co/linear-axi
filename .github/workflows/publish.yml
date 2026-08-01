@@ -1,0 +1,58 @@
+name: Publish npm package
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out release
+        uses: actions/checkout@v6
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org/
+          package-manager-cache: false
+
+      - name: Verify release tag matches package version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          node --input-type=module -e '
+            import pkg from "./package.json" with { type: "json" };
+            const expected = `v${pkg.version}`;
+            if (process.env.RELEASE_TAG !== expected) {
+              console.error(`Release tag ${process.env.RELEASE_TAG} does not match ${expected}`);
+              process.exit(1);
+            }
+          '
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify generated skill
+        run: pnpm run build:skill -- --check
+
+      - name: Test
+        run: pnpm test
+
+      - name: Publish to npm
+        run: npm publish
+        env:
+          # Bootstrap the first publish with this secret; npm OIDC takes precedence once
+          # Trusted Publishing is configured, after which the secret should be deleted.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

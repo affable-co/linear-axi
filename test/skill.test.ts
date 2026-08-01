@@ -32,7 +32,8 @@ describe("createSkillMarkdown", () => {
   });
 
   it("teaches the npx invocation instead of a global install", () => {
-    expect(markdown).toContain("npx -y linear-axi");
+    expect(markdown).toContain("npx -y @affable-co/linear-axi");
+    expect(markdown).not.toContain("npx -y linear-axi");
   });
 
   it("mentions the LINEAR_API_KEY requirement", () => {
