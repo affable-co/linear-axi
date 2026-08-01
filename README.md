@@ -123,7 +123,7 @@ Publishing for organization `affable-co`, repository `linear-axi`, workflow `pub
 OIDC and do not require an npm token.
 
 For each release, update `package.json`, regenerate the skill when its guidance changed, merge to
-`main`, and create a GitHub Release whose tag exactly matches the version, such as `v0.1.0`.
+`main`, and create a GitHub Release whose tag exactly matches the version, such as `v0.1.1`.
 
 ## License
 
