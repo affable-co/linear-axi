@@ -1,4 +1,4 @@
-import type { LinearContext } from "../context.js";
+import { ambientProject, type LinearContext } from "../context.js";
 import { getFlag, getPositional, rejectUnknownFlags } from "../args.js";
 import { takeBody, truncateBody } from "../body.js";
 import { AxiError } from "../errors.js";
@@ -22,12 +22,13 @@ import {
 export const DOC_HELP = `usage: linear-axi doc <subcommand> [args] [flags]
 subcommands[4]:
   list, view, create, update
-list flags{4}: --query <text> (title contains), --project <name>, --limit <n> (default 25), --fields <a,b,c> (list only)
+list flags{4}: --query <text> (title contains), --project <name|none>, --limit <n> (default 25), --fields <a,b,c> (list only)
 view flags{1}: --full (untruncated content)
 create flags{3}: --title (required), --body/--body-file (content), --project <name>
 update flags{3}: --title, --body/--body-file (content)
 notes:
   Document ids are UUIDs (shown as \`id\`); pass one to \`doc view <id>\`.
+  List/create --project falls back to LINEAR_PROJECT or .linear.toml project_id; pass --project none on list to clear it.
   Extra --fields for list: creator, url, created, team, summary.
 examples:
   linear-axi doc list --query onboarding
@@ -76,7 +77,7 @@ async function listDocs(args: string[], ctx?: LinearContext): Promise<string> {
     scopeParts.push(`query: ${query}`);
   }
 
-  const project = getFlag(args, "--project");
+  const project = ambientProject(getFlag(args, "--project"), ctx);
   if (project) {
     const resolved = await resolveProject(project);
     filter["project"] = { id: { eq: resolved.id } };
@@ -177,7 +178,7 @@ async function createDoc(args: string[], ctx?: LinearContext): Promise<string> {
   const input: Record<string, any> = { title };
   if (body) input["content"] = body;
 
-  const project = getFlag(args, "--project");
+  const project = ambientProject(getFlag(args, "--project"), ctx);
   if (project) input["projectId"] = (await resolveProject(project)).id;
 
   const data = await gqlQuery<{

@@ -3,7 +3,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { execFile } from "node:child_process";
-import { issueFromBranchName, teamFromConfig, resolveContext } from "../src/context.js";
+import {
+  ambientProject,
+  configFromLinearToml,
+  issueFromBranchName,
+  projectFromConfig,
+  teamFromConfig,
+  resolveContext,
+} from "../src/context.js";
 
 vi.mock("node:child_process", () => ({
   execFile: vi.fn(),
@@ -61,38 +68,70 @@ describe("issueFromBranchName", () => {
   });
 });
 
-describe("teamFromConfig", () => {
-  it("reads team_id from a .linear.toml in the given dir", () =>
+describe("configFromLinearToml", () => {
+  it("reads team_id and project_id from a .linear.toml in the given dir", () =>
     withTempDir((dir) => {
-      writeFileSync(join(dir, ".linear.toml"), 'team_id = "ENG"\n', "utf8");
+      writeFileSync(join(dir, ".linear.toml"), 'team_id = "ENG"\nproject_id = "Q3 Launch"\n', "utf8");
+      expect(configFromLinearToml(dir)).toEqual({ teamId: "ENG", projectId: "Q3 Launch" });
       expect(teamFromConfig(dir)).toBe("ENG");
+      expect(projectFromConfig(dir)).toBe("Q3 Launch");
     }));
 
   it("walks up to an ancestor .linear.toml", () =>
     withTempDir((dir) => {
-      writeFileSync(join(dir, ".linear.toml"), 'team_id = "OPS"\n', "utf8");
+      writeFileSync(join(dir, ".linear.toml"), 'team_id = "OPS"\nproject_id = "Infra"\n', "utf8");
       const child = join(dir, "nested", "deep");
       mkdirSync(child, { recursive: true });
-      expect(teamFromConfig(child)).toBe("OPS");
+      expect(configFromLinearToml(child)).toEqual({ teamId: "OPS", projectId: "Infra" });
     }));
 
-  it("returns undefined when no .linear.toml exists", () =>
+  it("returns empty when no .linear.toml exists", () =>
     withTempDir((dir) => {
+      expect(configFromLinearToml(dir)).toEqual({});
       expect(teamFromConfig(dir)).toBeUndefined();
+      expect(projectFromConfig(dir)).toBeUndefined();
     }));
+
+  it("returns only the keys that are present", () =>
+    withTempDir((dir) => {
+      writeFileSync(join(dir, ".linear.toml"), 'project_id = "Solo"\n', "utf8");
+      expect(configFromLinearToml(dir)).toEqual({ projectId: "Solo" });
+    }));
+});
+
+describe("ambientProject", () => {
+  it("prefers an explicit flag over ambient context", () => {
+    expect(
+      ambientProject("Flag Project", { project: { project: "Env Project", source: "env" } }),
+    ).toBe("Flag Project");
+  });
+
+  it("uses ambient context when the flag is absent", () => {
+    expect(ambientProject(undefined, { project: { project: "Env Project", source: "env" } })).toBe(
+      "Env Project",
+    );
+  });
+
+  it("clears ambient context when the flag is none", () => {
+    expect(ambientProject("none", { project: { project: "Env Project", source: "env" } })).toBeUndefined();
+  });
 });
 
 describe("resolveContext precedence", () => {
   const savedTeam = process.env["LINEAR_TEAM"];
+  const savedProject = process.env["LINEAR_PROJECT"];
 
   beforeEach(() => {
     mockedExecFile.mockReset();
     delete process.env["LINEAR_TEAM"];
+    delete process.env["LINEAR_PROJECT"];
   });
 
   afterEach(() => {
     if (savedTeam === undefined) delete process.env["LINEAR_TEAM"];
     else process.env["LINEAR_TEAM"] = savedTeam;
+    if (savedProject === undefined) delete process.env["LINEAR_PROJECT"];
+    else process.env["LINEAR_PROJECT"] = savedProject;
   });
 
   it("prefers the --team flag (source flag)", async () => {
@@ -132,6 +171,34 @@ describe("resolveContext precedence", () => {
       const ctx = await resolveContext();
       expect(ctx.team).toBeUndefined();
       expect(ctx.branchIssue).toBeUndefined();
+    });
+  });
+
+  it("uses LINEAR_PROJECT when set (source env)", async () => {
+    mockBranch(null);
+    process.env["LINEAR_PROJECT"] = "Env Project";
+    await inTempCwd(async () => {
+      const ctx = await resolveContext();
+      expect(ctx.project).toEqual({ project: "Env Project", source: "env" });
+    });
+  });
+
+  it("falls back to .linear.toml project_id when env is unset", async () => {
+    mockBranch(null);
+    await inTempCwd(async () => {
+      writeFileSync(join(process.cwd(), ".linear.toml"), 'project_id = "Toml Project"\n', "utf8");
+      const ctx = await resolveContext();
+      expect(ctx.project).toEqual({ project: "Toml Project", source: "config" });
+    });
+  });
+
+  it("prefers LINEAR_PROJECT over .linear.toml project_id", async () => {
+    mockBranch(null);
+    process.env["LINEAR_PROJECT"] = "Env Project";
+    await inTempCwd(async () => {
+      writeFileSync(join(process.cwd(), ".linear.toml"), 'project_id = "Toml Project"\n', "utf8");
+      const ctx = await resolveContext();
+      expect(ctx.project).toEqual({ project: "Env Project", source: "env" });
     });
   });
 });

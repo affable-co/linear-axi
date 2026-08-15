@@ -197,6 +197,31 @@ describe("issue list", () => {
     expect(result).toContain("priority: high");
   });
 
+  it("applies ambient project context when --project is omitted", async () => {
+    mockedResolveProject.mockResolvedValue({ id: "p1", name: "Ship" });
+    mockedGql.mockResolvedValue(issuesResponse([oneIssue]));
+    const ctx: LinearContext = {
+      ...teamCtx,
+      project: { project: "Ship", source: "env" },
+    };
+    await issueCommand(["list"], ctx);
+    expect(mockedResolveProject).toHaveBeenCalledWith("Ship");
+    const vars = mockedGql.mock.calls[0][1] as { filter: Record<string, unknown> };
+    expect(vars.filter.project).toEqual({ id: { eq: "p1" } });
+  });
+
+  it("clears ambient project filter with --project none", async () => {
+    mockedGql.mockResolvedValue(issuesResponse([oneIssue]));
+    const ctx: LinearContext = {
+      ...teamCtx,
+      project: { project: "Ship", source: "env" },
+    };
+    await issueCommand(["list", "--project", "none"], ctx);
+    expect(mockedResolveProject).not.toHaveBeenCalled();
+    const vars = mockedGql.mock.calls[0][1] as { filter: Record<string, unknown> };
+    expect(vars.filter.project).toBeUndefined();
+  });
+
   it("echoes the filters in the empty state", async () => {
     mockedGql.mockResolvedValue(issuesResponse([]));
     const result = await issueCommand(["list", "--priority", "high"], teamCtx);
@@ -382,6 +407,19 @@ describe("issue create", () => {
     expect(input.labelIds).toEqual(["lbl-bug", "lbl-ui"]);
   });
 
+  it("applies ambient project on create when --project is omitted", async () => {
+    mockedResolveProject.mockResolvedValue({ id: "p1", name: "Ship" });
+    mockedGql.mockResolvedValue(createResponse);
+    const ctx: LinearContext = {
+      ...teamCtx,
+      project: { project: "Ship", source: "config" },
+    };
+    await issueCommand(["create", "--title", "New"], ctx);
+    expect(mockedResolveProject).toHaveBeenCalledWith("Ship");
+    const input = (mockedGql.mock.calls[0][1] as { input: Record<string, unknown> }).input;
+    expect(input.projectId).toBe("p1");
+  });
+
   it("echoes fields that were set on create", async () => {
     mockedResolveUser.mockResolvedValue({ id: "u-me", displayName: "Me" });
     mockedResolveLabel.mockImplementation(async (name: string) => ({ id: `lbl-${name}`, name }));
@@ -453,6 +491,19 @@ describe("issue update", () => {
   it("errors when there is nothing to update", async () => {
     mockedGql.mockResolvedValueOnce(coreResponse());
     await expect(issueCommand(["update", "ENG-1"], teamCtx)).rejects.toThrow(/Nothing to update/);
+  });
+
+  it("does not apply ambient project on update without an explicit --project", async () => {
+    mockedGql.mockResolvedValueOnce(coreResponse()).mockResolvedValueOnce(updateResponse);
+    const ctx: LinearContext = {
+      ...teamCtx,
+      project: { project: "Ship", source: "env" },
+    };
+    await issueCommand(["update", "ENG-1", "--title", "Renamed"], ctx);
+    // First call is core fetch; second is the mutation — ambient must not inject projectId.
+    const input = (mockedGql.mock.calls[1][1] as { input: Record<string, unknown> }).input;
+    expect(input.projectId).toBeUndefined();
+    expect(mockedResolveProject).not.toHaveBeenCalled();
   });
 
   it("routes +label / -label to added and removed label ids", async () => {
