@@ -1,4 +1,4 @@
-import type { LinearContext } from "../context.js";
+import { resolveProjectScope, type LinearContext } from "../context.js";
 import { getFlag, getPositional, rejectUnknownFlags } from "../args.js";
 import { takeBody, truncateBody } from "../body.js";
 import { AxiError } from "../errors.js";
@@ -22,12 +22,14 @@ import {
 export const DOC_HELP = `usage: linear-axi doc <subcommand> [args] [flags]
 subcommands[4]:
   list, view, create, update
-list flags{4}: --query <text> (title contains), --project <name>, --limit <n> (default 25), --fields <a,b,c> (list only)
+list flags{4}: --query <text> (title contains), --project <name|none|any>, --limit <n> (default 25), --fields <a,b,c> (list only)
 view flags{1}: --full (untruncated content)
 create flags{3}: --title (required), --body/--body-file (content), --project <name>
 update flags{3}: --title, --body/--body-file (content)
 notes:
   Document ids are UUIDs (shown as \`id\`); pass one to \`doc view <id>\`.
+  List/create --project falls back to LINEAR_PROJECT or .linear.toml project_id.
+  On list, --project none means no project; --project any ignores the ambient default.
   Extra --fields for list: creator, url, created, team, summary.
 examples:
   linear-axi doc list --query onboarding
@@ -76,12 +78,16 @@ async function listDocs(args: string[], ctx?: LinearContext): Promise<string> {
     scopeParts.push(`query: ${query}`);
   }
 
-  const project = getFlag(args, "--project");
-  if (project) {
-    const resolved = await resolveProject(project);
+  const project = resolveProjectScope(getFlag(args, "--project"), ctx);
+  if (project?.type === "none") {
+    filter["project"] = { null: true };
+    scopeParts.push("project: none");
+  } else if (project?.type === "named") {
+    const resolved = await resolveProject(project.name);
     filter["project"] = { id: { eq: resolved.id } };
     scopeParts.push(`project: ${resolved.name}`);
   }
+
 
   const selections = ["id", "title", "project { name }", "updatedAt", ...extraSelections];
   const data = await gqlQuery<{
@@ -177,8 +183,9 @@ async function createDoc(args: string[], ctx?: LinearContext): Promise<string> {
   const input: Record<string, any> = { title };
   if (body) input["content"] = body;
 
-  const project = getFlag(args, "--project");
-  if (project) input["projectId"] = (await resolveProject(project)).id;
+  const project = resolveProjectScope(getFlag(args, "--project"), ctx);
+  if (project?.type === "named") input["projectId"] = (await resolveProject(project.name)).id;
+  // type "none" / "any": omit projectId (overrides ambient default)
 
   const data = await gqlQuery<{
     documentCreate: { success: boolean; document: Record<string, unknown> };

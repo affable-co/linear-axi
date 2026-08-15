@@ -57,9 +57,10 @@ linear-axi requires a Linear API key in the \`LINEAR_API_KEY\` environment varia
 3. Drill in command-first: \`issue list\`, \`issue view ABC-123\`, \`project view <name>\`, \`cycle view current --team <key>\`, and so on.
 4. Issues accept identifiers everywhere (\`ABC-123\`, case-insensitive); teams accept keys or names; states, labels, projects, and cycles accept names; assignees accept \`me\`, an email, or a display name. Unknown \`--label\` values fail — create labels first with \`label create\`.
 5. Scope to a team by placing \`--team <key|name>\` AFTER the command. Without it, the team comes from \`LINEAR_TEAM\`, a \`.linear.toml\` \`team_id\`, or the current git branch's issue identifier.
-6. Move work along with \`issue start ABC-123\` (assigns you, moves to started, creates the git branch), then \`issue close ABC-123\` when it ships.
-7. Filter lists tightly (\`--state\`, \`--assignee me\`, \`--label\`, \`--updated-since 2w\`) - narrow queries cost fewer tokens than wide ones.
-8. Every response ends with contextual next-step hints under \`help:\` - follow them.
+6. Scope to a project via \`--project <name>\`, or set \`LINEAR_PROJECT\` / \`.linear.toml\` \`project_id\` so list/create pick it up automatically. On list, \`--project none\` means no project; \`--project any\` ignores the ambient default. Update still requires an explicit \`--project\`.
+7. Move work along with \`issue start ABC-123\` (assigns you, moves to started, creates the git branch), then \`issue close ABC-123\` when it ships.
+8. Filter lists tightly (\`--state\`, \`--assignee me\`, \`--label\`, \`--updated-since 2w\`) - narrow queries cost fewer tokens than wide ones.
+9. Every response ends with contextual next-step hints under \`help:\` - follow them.
 
 ## Commands
 

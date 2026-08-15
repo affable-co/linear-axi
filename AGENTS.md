@@ -28,6 +28,9 @@ or pruning over appending.
 
 - `--team` is the one global flag: stripped by `withTeamContext` in cli.ts before handlers
   run. Per-command `rejectUnknownFlags` never sees it; do not add it to allowed-flag lists.
+- Ambient project is *not* a global flag: list/create read `--project`, else `LINEAR_PROJECT`,
+  else `.linear.toml` `project_id`. Update only changes project when `--project` is explicit.
+  On list, `--project none` filters to no project; `--project any` ignores the ambient default.
 - Every subcommand calls `rejectUnknownFlags` FIRST, before consuming any flag.
 - Every resolver error inlines the valid options ("Available: …") when the set is bounded.
 - Mutations are read-check-write idempotent; no-ops return `message: Already …` with exit 0.
