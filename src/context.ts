@@ -85,16 +85,27 @@ export function projectFromConfig(startDir: string): string | undefined {
 }
 
 /**
- * Effective project for list/create: explicit `--project` wins; `none` clears
- * ambient defaults; otherwise LINEAR_PROJECT / .linear.toml project_id apply.
+ * Effective project for list/create.
+ *
+ * - `--project <name>` — that project (overrides ambient)
+ * - `--project none` — no project (list: null filter; create: omit projectId)
+ * - `--project any` — ignore ambient; list with no project filter
+ * - omitted — LINEAR_PROJECT / .linear.toml project_id when set
  */
-export function ambientProject(
+export type ProjectScope =
+  | { type: "named"; name: string }
+  | { type: "none" }
+  | { type: "any" };
+
+export function resolveProjectScope(
   flagValue: string | undefined,
   ctx?: LinearContext,
-): string | undefined {
-  if (flagValue === "none") return undefined;
-  if (flagValue) return flagValue;
-  return ctx?.project?.project;
+): ProjectScope | undefined {
+  if (flagValue === "any") return { type: "any" };
+  if (flagValue === "none") return { type: "none" };
+  if (flagValue) return { type: "named", name: flagValue };
+  if (ctx?.project?.project) return { type: "named", name: ctx.project.project };
+  return undefined;
 }
 
 function currentGitBranch(): Promise<string | undefined> {

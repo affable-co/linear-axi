@@ -210,13 +210,25 @@ describe("issue list", () => {
     expect(vars.filter.project).toEqual({ id: { eq: "p1" } });
   });
 
-  it("clears ambient project filter with --project none", async () => {
+  it("filters to issues with no project for --project none", async () => {
     mockedGql.mockResolvedValue(issuesResponse([oneIssue]));
     const ctx: LinearContext = {
       ...teamCtx,
       project: { project: "Ship", source: "env" },
     };
     await issueCommand(["list", "--project", "none"], ctx);
+    expect(mockedResolveProject).not.toHaveBeenCalled();
+    const vars = mockedGql.mock.calls[0][1] as { filter: Record<string, unknown> };
+    expect(vars.filter.project).toEqual({ null: true });
+  });
+
+  it("ignores ambient project with --project any", async () => {
+    mockedGql.mockResolvedValue(issuesResponse([oneIssue]));
+    const ctx: LinearContext = {
+      ...teamCtx,
+      project: { project: "Ship", source: "env" },
+    };
+    await issueCommand(["list", "--project", "any"], ctx);
     expect(mockedResolveProject).not.toHaveBeenCalled();
     const vars = mockedGql.mock.calls[0][1] as { filter: Record<string, unknown> };
     expect(vars.filter.project).toBeUndefined();

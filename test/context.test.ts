@@ -4,10 +4,10 @@ import { join } from "node:path";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { execFile } from "node:child_process";
 import {
-  ambientProject,
   configFromLinearToml,
   issueFromBranchName,
   projectFromConfig,
+  resolveProjectScope,
   teamFromConfig,
   resolveContext,
 } from "../src/context.js";
@@ -99,21 +99,30 @@ describe("configFromLinearToml", () => {
     }));
 });
 
-describe("ambientProject", () => {
+describe("resolveProjectScope", () => {
   it("prefers an explicit flag over ambient context", () => {
     expect(
-      ambientProject("Flag Project", { project: { project: "Env Project", source: "env" } }),
-    ).toBe("Flag Project");
+      resolveProjectScope("Flag Project", { project: { project: "Env Project", source: "env" } }),
+    ).toEqual({ type: "named", name: "Flag Project" });
   });
 
   it("uses ambient context when the flag is absent", () => {
-    expect(ambientProject(undefined, { project: { project: "Env Project", source: "env" } })).toBe(
-      "Env Project",
-    );
+    expect(resolveProjectScope(undefined, { project: { project: "Env Project", source: "env" } })).toEqual({
+      type: "named",
+      name: "Env Project",
+    });
   });
 
-  it("clears ambient context when the flag is none", () => {
-    expect(ambientProject("none", { project: { project: "Env Project", source: "env" } })).toBeUndefined();
+  it("treats none as no-project, not as clearing ambient", () => {
+    expect(resolveProjectScope("none", { project: { project: "Env Project", source: "env" } })).toEqual({
+      type: "none",
+    });
+  });
+
+  it("treats any as ignore-ambient (no project filter)", () => {
+    expect(resolveProjectScope("any", { project: { project: "Env Project", source: "env" } })).toEqual({
+      type: "any",
+    });
   });
 });
 

@@ -70,7 +70,8 @@ linear-axi setup hooks          install SessionStart ambient context
 Run `linear-axi <command> --help` for flags and examples. `--team <key|name>` is accepted after any
 command; without it the team comes from `LINEAR_TEAM`, a `.linear.toml` `team_id`, or the
 current git branch. List/create `--project` falls back to `LINEAR_PROJECT` or `.linear.toml`
-`project_id` (pass `--project none` on list to clear the ambient filter).
+`project_id`. On list, `--project none` means no project; `--project any` ignores the ambient
+default.
 
 Example repo config:
 

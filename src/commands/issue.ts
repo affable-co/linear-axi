@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { ambientProject, type LinearContext } from "../context.js";
+import { resolveProjectScope, type LinearContext } from "../context.js";
 import { getFlag, takeFlag, takeBoolFlag, getPositional, rejectUnknownFlags } from "../args.js";
 import { takeBody, truncateBody } from "../body.js";
 import { toLinearDuration, parseDueDate } from "../dates.js";
@@ -48,7 +48,7 @@ import {
 export const ISSUE_HELP = `usage: linear-axi issue <subcommand> [args] [flags]
 subcommands[10]:
   list, view, create, update, close, reopen, comment, comments, start, branch
-list flags{11}: --assignee <me|email|name|none>, --state <name|type>, --label <name>, --project <name|none>, --cycle <current|next|previous|n|name>, --priority <urgent|high|medium|low|none>, --query <text>, --updated-since <2h|3d|2w|1m|ISO>, --limit <n> (default 25), --fields <a,b,c> (list only), --sort <updated|created>
+list flags{11}: --assignee <me|email|name|none>, --state <name|type>, --label <name>, --project <name|none|any>, --cycle <current|next|previous|n|name>, --priority <urgent|high|medium|low|none>, --query <text>, --updated-since <2h|3d|2w|1m|ISO>, --limit <n> (default 25), --fields <a,b,c> (list only), --sort <updated|created>
 view flags{2}: --full (untruncated description), --comments (include comment thread)
 create flags{14}: --title (required), --body/--body-file, --assignee, --state, --label (repeatable; must already exist), --priority, --project, --parent <id>, --estimate <n>, --due <YYYY-MM-DD>, --blocked-by <id>, --blocks <id>, --relates-to <id>, --duplicate-of <id> (relation flags repeatable)
 update flags{15}: --title, --body/--body-file, --assignee, --state, --label +<name>/-<name> (repeatable; bare adds; labels must already exist), --priority, --project, --cycle, --estimate, --due, --parent <id>, --blocked-by +<id>/-<id>, --blocks +<id>/-<id>, --relates-to +<id>/-<id>, --duplicate-of +<id>/-<id> (bare adds)
@@ -59,7 +59,8 @@ branch: prints the issue's git branch name only
 notes:
   Issue ids accept ABC-123 identifiers or UUIDs; bare numbers use the context team.
   --team <key|name> is accepted after every subcommand (see \`linear-axi --help\`).
-  List/create --project falls back to LINEAR_PROJECT or .linear.toml project_id; pass --project none on list to clear it.
+  List/create --project falls back to LINEAR_PROJECT or .linear.toml project_id.
+  On list, --project none means unassigned-to-project; --project any ignores the ambient default.
   Unknown --label values fail with NOT_FOUND (create the label first via \`label create\`).
   Create/update echo the fields that were set (no follow-up view needed to verify).
 examples:
@@ -217,12 +218,16 @@ async function listIssues(args: string[], ctx?: LinearContext): Promise<string> 
     scopeParts.push(`label: ${resolved.name}`);
   }
 
-  const project = ambientProject(getFlag(args, "--project"), ctx);
-  if (project) {
-    const resolved = await resolveProject(project);
+  const project = resolveProjectScope(getFlag(args, "--project"), ctx);
+  if (project?.type === "none") {
+    filter["project"] = { null: true };
+    scopeParts.push("project: none");
+  } else if (project?.type === "named") {
+    const resolved = await resolveProject(project.name);
     filter["project"] = { id: { eq: resolved.id } };
     scopeParts.push(`project: ${resolved.name}`);
   }
+
 
   const cycle = getFlag(args, "--cycle");
   if (cycle) {
@@ -542,11 +547,12 @@ async function createIssue(args: string[], ctx?: LinearContext): Promise<string>
     echoed.add("priority");
   }
 
-  const project = ambientProject(takeFlag(args, "--project"), ctx);
-  if (project) {
-    input["projectId"] = (await resolveProject(project)).id;
+  const project = resolveProjectScope(takeFlag(args, "--project"), ctx);
+  if (project?.type === "named") {
+    input["projectId"] = (await resolveProject(project.name)).id;
     echoed.add("project");
   }
+  // type "none" / "any": omit projectId (overrides ambient default)
 
   const parent = takeFlag(args, "--parent");
   if (parent) {
