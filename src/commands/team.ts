@@ -23,7 +23,7 @@ import {
 export const TEAM_HELP = `usage: linear-axi team <subcommand> [args] [flags]
 subcommands[2]:
   list, view <key|name|uuid>
-list flags{2}: --limit <n> (default 50), --fields <a,b,c>
+list flags{2}: --limit <n> (default 50), --fields <a,b,c> (list only)
 list extra fields: description, cycles, private, created
 view: one call returns states, labels, members, and the active cycle — every valid --state and --label value for the team
 examples:

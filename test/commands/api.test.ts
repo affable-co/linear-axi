@@ -36,6 +36,12 @@ describe("apiCommand", () => {
     for (const line of lines) expect(line).toMatch(/^ {2}linear-axi /);
   });
 
+  it("HELP documents unwrapped JSON output and includes a mutation example", () => {
+    expect(API_HELP).toContain('no {"data":');
+    expect(API_HELP).toContain("issueRelationCreate");
+    expect(API_HELP).toContain("ABC-123");
+  });
+
   it("throws immediately (never hangs) when no query and stdin is a TTY", async () => {
     mockedTTY.mockReturnValue(true);
     await expect(apiCommand([])).rejects.toThrow(/GraphQL query is required/);

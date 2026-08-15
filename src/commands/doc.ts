@@ -2,6 +2,7 @@ import type { LinearContext } from "../context.js";
 import { getFlag, getPositional, rejectUnknownFlags } from "../args.js";
 import { takeBody, truncateBody } from "../body.js";
 import { AxiError } from "../errors.js";
+import { parseFields, type ExtraFieldSpec } from "../fields.js";
 import { formatCountLine } from "../format.js";
 import { gqlQuery } from "../linear.js";
 import { resolveProject } from "../resolve.js";
@@ -21,12 +22,13 @@ import {
 export const DOC_HELP = `usage: linear-axi doc <subcommand> [args] [flags]
 subcommands[4]:
   list, view, create, update
-list flags{3}: --query <text> (title contains), --project <name>, --limit <n> (default 25), --fields <a,b,c>
+list flags{4}: --query <text> (title contains), --project <name>, --limit <n> (default 25), --fields <a,b,c> (list only)
 view flags{1}: --full (untruncated content)
 create flags{3}: --title (required), --body/--body-file (content), --project <name>
 update flags{3}: --title, --body/--body-file (content)
 notes:
   Document ids are UUIDs (shown as \`id\`); pass one to \`doc view <id>\`.
+  Extra --fields for list: creator, url, created, team, summary.
 examples:
   linear-axi doc list --query onboarding
   linear-axi doc view 5f2c9c1e-1a2b-4c3d-9e8f-0a1b2c3d4e5f
@@ -41,6 +43,17 @@ const listSchema: FieldDef[] = [
   relativeTime("updatedAt", "updated"),
 ];
 
+const LIST_EXTRA_FIELDS: Record<string, ExtraFieldSpec> = {
+  creator: {
+    selection: "creator { displayName }",
+    def: custom("creator", (d) => d.creator?.displayName ?? "unknown"),
+  },
+  url: { selection: "url", def: field("url") },
+  created: { selection: "createdAt", def: relativeTime("createdAt", "created") },
+  team: { selection: "team { key }", def: custom("team", (d) => d.team?.key ?? "none") },
+  summary: { selection: "summary", def: custom("summary", (d) => d.summary ?? "none") },
+};
+
 // ---------------------------------------------------------------------------
 // list
 
@@ -51,6 +64,7 @@ async function listDocs(args: string[], ctx?: LinearContext): Promise<string> {
 
   const limitRaw = getFlag(args, "--limit");
   const limit = limitRaw ? Math.min(Math.max(parseInt(limitRaw, 10) || 25, 1), 250) : 25;
+  const { extraDefs, extraSelections } = parseFields(getFlag(args, "--fields"), LIST_EXTRA_FIELDS);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- filter tree is dynamic
   const filter: Record<string, any> = {};
@@ -69,12 +83,13 @@ async function listDocs(args: string[], ctx?: LinearContext): Promise<string> {
     scopeParts.push(`project: ${resolved.name}`);
   }
 
+  const selections = ["id", "title", "project { name }", "updatedAt", ...extraSelections];
   const data = await gqlQuery<{
     documents: { nodes: Record<string, unknown>[]; pageInfo: { hasNextPage: boolean } };
   }>(
     `query($filter: DocumentFilter, $first: Int!) {
       documents(filter: $filter, first: $first) {
-        nodes { id title project { name } updatedAt }
+        nodes { ${[...new Set(selections)].join(" ")} }
         pageInfo { hasNextPage }
       }
     }`,
@@ -90,7 +105,7 @@ async function listDocs(args: string[], ctx?: LinearContext): Promise<string> {
   } else {
     blocks.push(formatCountLine({ count: docs.length, limit, hasMore: data.documents.pageInfo.hasNextPage }));
     if (scopeParts.length) blocks.push(`scope: ${scopeParts.join(", ")}`);
-    blocks.push(renderList("docs", docs, listSchema));
+    blocks.push(renderList("docs", docs, [...listSchema, ...extraDefs]));
   }
 
   const hints: string[] = [];

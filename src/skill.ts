@@ -55,8 +55,8 @@ linear-axi requires a Linear API key in the \`LINEAR_API_KEY\` environment varia
 1. Run \`${NPX_COMMAND} auth status\` when authentication is unknown or needs verification.
 2. Run \`${NPX_COMMAND}\` with no arguments for a dashboard - your active issues and suggested next commands.
 3. Drill in command-first: \`issue list\`, \`issue view ABC-123\`, \`project view <name>\`, \`cycle view current --team <key>\`, and so on.
-4. Issues accept identifiers everywhere (\`ABC-123\`, case-insensitive); teams accept keys or names; states, labels, projects, and cycles accept names; assignees accept \`me\`, an email, or a display name.
-5. Scope to a team by placing \`--team <key>\` AFTER the command. Without it, the team comes from \`LINEAR_TEAM\`, a \`.linear.toml\` \`team_id\`, or the current git branch's issue identifier.
+4. Issues accept identifiers everywhere (\`ABC-123\`, case-insensitive); teams accept keys or names; states, labels, projects, and cycles accept names; assignees accept \`me\`, an email, or a display name. Unknown \`--label\` values fail — create labels first with \`label create\`.
+5. Scope to a team by placing \`--team <key|name>\` AFTER the command. Without it, the team comes from \`LINEAR_TEAM\`, a \`.linear.toml\` \`team_id\`, or the current git branch's issue identifier.
 6. Move work along with \`issue start ABC-123\` (assigns you, moves to started, creates the git branch), then \`issue close ABC-123\` when it ships.
 7. Filter lists tightly (\`--state\`, \`--assignee me\`, \`--label\`, \`--updated-since 2w\`) - narrow queries cost fewer tokens than wide ones.
 8. Every response ends with contextual next-step hints under \`help:\` - follow them.
@@ -81,7 +81,7 @@ Run \`${NPX_COMMAND} --help\` for global flags, or \`${NPX_COMMAND} <command> --
 - \`issue close\` moves to the team's first completed-type state; \`issue close --cancel\` uses the canceled-type state instead.
 - States accept a name ("In Review") or a type (\`triage\`, \`backlog\`, \`unstarted\`, \`started\`, \`completed\`, \`canceled\`).
 - \`--updated-since\` accepts friendly durations: \`2h\`, \`3d\`, \`2w\`, \`1m\`, \`1y\`, or an ISO date.
-- Use \`api\` for anything the dedicated commands do not cover, e.g. \`${NPX_COMMAND} api 'query { viewer { email } }'\`.
+- Use \`api\` for anything the dedicated commands do not cover. Output is the unwrapped \`data\` payload (no \`{"data":…}\` wrapper). Identifiers like \`ABC-123\` work wherever Linear accepts issue ids. Example: \`${NPX_COMMAND} api 'mutation($input:IssueRelationCreateInput!){ issueRelationCreate(input:$input){ success } }' --input '{"input":{"type":"blocks","issueId":"ABC-1","relatedIssueId":"ABC-2"}}'\`.
 `;
 }
 

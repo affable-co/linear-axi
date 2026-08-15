@@ -5,12 +5,13 @@ import { gqlRaw } from "../linear.js";
 import { isStdinTTY, readStdin } from "../stdin.js";
 
 export const API_HELP = `usage: linear-axi api '<graphql>' [--input '<json>']
-description: Raw Linear GraphQL escape hatch. Prints compact JSON (no TOON). Query may also be piped on stdin.
+description: Raw Linear GraphQL escape hatch. Prints the unwrapped data payload as compact JSON (no {"data":…} wrapper, no TOON). Query may also be piped on stdin. Issue/team identifiers (ABC-123) are accepted anywhere Linear accepts them.
 flags[1]:
   --input '<json>' (variables object)
 examples:
   linear-axi api '{ viewer { id name } }'
   linear-axi api 'query($id:String!){ issue(id:$id){ title } }' --input '{"id":"ABC-123"}'
+  linear-axi api 'mutation($input:IssueRelationCreateInput!){ issueRelationCreate(input:$input){ success issueRelation{ id type } } }' --input '{"input":{"type":"blocks","issueId":"ABC-1","relatedIssueId":"ABC-2"}}'
 `;
 
 export async function apiCommand(args: string[], _ctx?: LinearContext): Promise<string> {
