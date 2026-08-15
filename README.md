@@ -67,7 +67,7 @@ linear-axi auth status          verify credentials and show the authenticated ac
 linear-axi setup hooks          install SessionStart ambient context
 ```
 
-Run `linear-axi <command> --help` for flags and examples. `--team <key>` is accepted after any
+Run `linear-axi <command> --help` for flags and examples. `--team <key|name>` is accepted after any
 command; without it the team comes from `LINEAR_TEAM`, a `.linear.toml` `team_id`, or the
 current git branch.
 

@@ -17,6 +17,17 @@ import {
   resolveUser,
   type ResolvedTeam,
 } from "../resolve.js";
+import {
+  RELATION_FLAGS,
+  RELATION_SELECTION,
+  applyRelationChanges,
+  formatRelationList,
+  parseRelationChanges,
+  relationFlagsPresent,
+  relationsFromIssue,
+  type RelationFlag,
+  type RelationSnapshot,
+} from "../relations.js";
 import { getSuggestions } from "../suggestions.js";
 import {
   custom,
@@ -37,22 +48,24 @@ import {
 export const ISSUE_HELP = `usage: linear-axi issue <subcommand> [args] [flags]
 subcommands[10]:
   list, view, create, update, close, reopen, comment, comments, start, branch
-list flags{9}: --assignee <me|email|name|none>, --state <name|type>, --label <name>, --project <name>, --cycle <current|next|previous|n|name>, --priority <urgent|high|medium|low|none>, --query <text>, --updated-since <2h|3d|2w|1m|ISO>, --limit <n> (default 25), --fields <a,b,c>, --sort <updated|created>
+list flags{11}: --assignee <me|email|name|none>, --state <name|type>, --label <name>, --project <name>, --cycle <current|next|previous|n|name>, --priority <urgent|high|medium|low|none>, --query <text>, --updated-since <2h|3d|2w|1m|ISO>, --limit <n> (default 25), --fields <a,b,c> (list only), --sort <updated|created>
 view flags{2}: --full (untruncated description), --comments (include comment thread)
-create flags{10}: --title (required), --body/--body-file, --assignee, --state, --label (repeatable), --priority, --project, --parent <id>, --estimate <n>, --due <YYYY-MM-DD>
-update flags{11}: --title, --body/--body-file, --assignee, --state, --label +<name>/-<name> (repeatable; bare adds), --priority, --project, --cycle, --estimate, --due, --parent <id>
+create flags{14}: --title (required), --body/--body-file, --assignee, --state, --label (repeatable; must already exist), --priority, --project, --parent <id>, --estimate <n>, --due <YYYY-MM-DD>, --blocked-by <id>, --blocks <id>, --relates-to <id>, --duplicate-of <id> (relation flags repeatable)
+update flags{15}: --title, --body/--body-file, --assignee, --state, --label +<name>/-<name> (repeatable; bare adds; labels must already exist), --priority, --project, --cycle, --estimate, --due, --parent <id>, --blocked-by +<id>/-<id>, --blocks +<id>/-<id>, --relates-to +<id>/-<id>, --duplicate-of +<id>/-<id> (bare adds)
 close flags{1}: --cancel (use canceled state instead of completed)
 comment flags{3}: --body/--body-file (required), --reply-to <comment-id>
 start: assigns you, moves to started, creates/checks out the git branch
 branch: prints the issue's git branch name only
 notes:
   Issue ids accept ABC-123 identifiers or UUIDs; bare numbers use the context team.
-  --team <key> is accepted after every subcommand (see \`linear-axi --help\`).
+  --team <key|name> is accepted after every subcommand (see \`linear-axi --help\`).
+  Unknown --label values fail with NOT_FOUND (create the label first via \`label create\`).
+  Create/update echo the fields that were set (no follow-up view needed to verify).
 examples:
   linear-axi issue list --assignee me --state started
   linear-axi issue view ABC-123 --comments
-  linear-axi issue create --team ENG --title "Fix login bug" --body-file plan.md
-  linear-axi issue update ABC-123 --state "In Review" --label +bug
+  linear-axi issue create --team ENG --title "Fix login bug" --body-file plan.md --blocked-by ENG-1
+  linear-axi issue update ABC-123 --state "In Review" --label +bug --blocks +ENG-2
   linear-axi issue comment ABC-123 --body "Deployed to staging"
   linear-axi issue start ABC-123
 `;
@@ -303,6 +316,7 @@ async function viewIssue(args: string[], ctx?: LinearContext): Promise<string> {
       labels { nodes { name } }
       parent { identifier }
       children(first: 50) { nodes { identifier } }
+      ${RELATION_SELECTION}
       comments(first: 50) { nodes { id body createdAt user { displayName } parent { id } } }
       attachments(first: 25) { nodes { title url } }
       priority estimate dueDate updatedAt
@@ -317,6 +331,12 @@ async function viewIssue(args: string[], ctx?: LinearContext): Promise<string> {
   const issue = data.issue;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- connection shapes
   const conn = (v: any): any[] => v?.nodes ?? [];
+  const rel = relationsFromIssue(
+    issue as {
+      relations?: { nodes?: { id: string; type: string; relatedIssue?: { identifier: string } }[] };
+      inverseRelations?: { nodes?: { id: string; type: string; issue?: { identifier: string } }[] };
+    },
+  );
 
   const schema: FieldDef[] = [
     field("identifier", "id"),
@@ -335,6 +355,10 @@ async function viewIssue(args: string[], ctx?: LinearContext): Promise<string> {
       const kids = conn(i.children).map((k) => k.identifier);
       return kids.length ? kids.join(",") : "none";
     }),
+    custom("blocked_by", () => formatRelationList(rel.blocked_by)),
+    custom("blocks", () => formatRelationList(rel.blocks)),
+    custom("relates_to", () => formatRelationList(rel.relates_to)),
+    custom("duplicate_of", () => formatRelationList(rel.duplicate_of)),
     custom("comments", (i) => conn(i.comments).length),
     custom("attachments", (i) => conn(i.attachments).length),
     relativeTime("updatedAt", "updated"),
@@ -379,7 +403,97 @@ const CREATE_FLAGS = [
   "--parent",
   "--estimate",
   "--due",
+  ...RELATION_FLAGS,
 ];
+
+/** Fields selected on issueCreate / issueUpdate payloads for mutation echoes. */
+const MUTATION_ISSUE_SELECTION = `identifier title url
+          state { name type }
+          assignee { displayName }
+          labels { nodes { name } }
+          project { name }
+          parent { identifier }
+          cycle { number }
+          priority estimate dueDate`;
+
+type EchoAxis =
+  | "title"
+  | "state"
+  | "assignee"
+  | "labels"
+  | "project"
+  | "parent"
+  | "cycle"
+  | "priority"
+  | "estimate"
+  | "due"
+  | "url";
+
+function collectRelationFlagValues(args: string[]): Record<RelationFlag, string[]> {
+  const values = {} as Record<RelationFlag, string[]>;
+  for (const flag of RELATION_FLAGS) {
+    values[flag] = collectRepeatable(args, flag);
+  }
+  return values;
+}
+
+function mutationEchoSchema(
+  axes: Set<EchoAxis>,
+  relations?: Partial<RelationSnapshot>,
+  message?: string,
+): FieldDef[] {
+  const schema: FieldDef[] = [field("identifier", "id")];
+  if (axes.has("title")) schema.push(field("title"));
+  if (axes.has("state")) schema.push(pluck("state", "name", "state"));
+  if (axes.has("assignee")) {
+    schema.push(custom("assignee", (i) => i.assignee?.displayName ?? "unassigned"));
+  }
+  if (axes.has("labels")) schema.push(joinArray("labels", "name", "labels"));
+  if (axes.has("project")) {
+    schema.push(custom("project", (i) => i.project?.name ?? "none"));
+  }
+  if (axes.has("parent")) {
+    schema.push(custom("parent", (i) => i.parent?.identifier ?? "none"));
+  }
+  if (axes.has("cycle")) {
+    schema.push(custom("cycle", (i) => i.cycle?.number ?? "none"));
+  }
+  if (axes.has("priority")) schema.push(priorityName());
+  if (axes.has("estimate")) {
+    schema.push(custom("estimate", (i) => i.estimate ?? "none"));
+  }
+  if (axes.has("due")) {
+    schema.push(custom("due", (i) => i.dueDate ?? "none"));
+  }
+  if (relations && relations.blocked_by !== undefined) {
+    const ids = relations.blocked_by;
+    schema.push(custom("blocked_by", () => formatRelationList(ids)));
+  }
+  if (relations && relations.blocks !== undefined) {
+    const ids = relations.blocks;
+    schema.push(custom("blocks", () => formatRelationList(ids)));
+  }
+  if (relations && relations.relates_to !== undefined) {
+    const ids = relations.relates_to;
+    schema.push(custom("relates_to", () => formatRelationList(ids)));
+  }
+  if (relations && relations.duplicate_of !== undefined) {
+    const ids = relations.duplicate_of;
+    schema.push(custom("duplicate_of", () => formatRelationList(ids)));
+  }
+  if (axes.has("url")) schema.push(field("url"));
+  if (message) schema.push(field("_message", "message"));
+  return schema;
+}
+
+function relationEcho(
+  snapshot: RelationSnapshot,
+  touched: Set<keyof RelationSnapshot>,
+): Partial<RelationSnapshot> {
+  const out: Partial<RelationSnapshot> = {};
+  for (const key of touched) out[key] = snapshot[key];
+  return out;
+}
 
 async function createIssue(args: string[], ctx?: LinearContext): Promise<string> {
   rejectUnknownFlags(args.slice(1), "issue create", CREATE_FLAGS);
@@ -399,13 +513,18 @@ async function createIssue(args: string[], ctx?: LinearContext): Promise<string>
   }
   const body = takeBody(args, { valueBoundaryFlags: CREATE_FLAGS });
 
+  const echoed = new Set<EchoAxis>(["title", "state", "url"]);
+
   // Resolve every reference before mutating so bad input fails cleanly.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- mutation input is dynamic
   const input: Record<string, any> = { teamId: team.id, title };
   if (body) input["description"] = body;
 
   const assignee = takeFlag(args, "--assignee");
-  if (assignee) input["assigneeId"] = (await resolveUser(assignee)).id;
+  if (assignee) {
+    input["assigneeId"] = (await resolveUser(assignee)).id;
+    echoed.add("assignee");
+  }
 
   const state = takeFlag(args, "--state");
   if (state) input["stateId"] = (await resolveState(team, state)).id;
@@ -413,22 +532,41 @@ async function createIssue(args: string[], ctx?: LinearContext): Promise<string>
   const labelNames = collectRepeatable(args, "--label");
   if (labelNames.length) {
     input["labelIds"] = await Promise.all(labelNames.map(async (l) => (await resolveLabel(l, team)).id));
+    echoed.add("labels");
   }
 
   const priority = takeFlag(args, "--priority");
-  if (priority) input["priority"] = parsePriority(priority);
+  if (priority) {
+    input["priority"] = parsePriority(priority);
+    echoed.add("priority");
+  }
 
   const project = takeFlag(args, "--project");
-  if (project) input["projectId"] = (await resolveProject(project)).id;
+  if (project) {
+    input["projectId"] = (await resolveProject(project)).id;
+    echoed.add("project");
+  }
 
   const parent = takeFlag(args, "--parent");
-  if (parent) input["parentId"] = (await fetchIssueCore(normalizeIssueRef(parent, ctx))).id;
+  if (parent) {
+    input["parentId"] = (await fetchIssueCore(normalizeIssueRef(parent, ctx))).id;
+    echoed.add("parent");
+  }
 
   const estimate = takeFlag(args, "--estimate");
-  if (estimate) input["estimate"] = parseEstimate(estimate);
+  if (estimate) {
+    input["estimate"] = parseEstimate(estimate);
+    echoed.add("estimate");
+  }
 
   const due = takeFlag(args, "--due");
-  if (due) input["dueDate"] = parseDueDate(due);
+  if (due) {
+    input["dueDate"] = parseDueDate(due);
+    echoed.add("due");
+  }
+
+  const relationValues = collectRelationFlagValues(args);
+  const relationChanges = parseRelationChanges(relationValues, { allowRemove: false });
 
   const data = await gqlQuery<{
     issueCreate: { success: boolean; issue: Record<string, unknown> };
@@ -436,21 +574,24 @@ async function createIssue(args: string[], ctx?: LinearContext): Promise<string>
     `mutation($input: IssueCreateInput!) {
       issueCreate(input: $input) {
         success
-        issue { identifier title url state { name } }
+        issue { ${MUTATION_ISSUE_SELECTION} }
       }
     }`,
     { input },
   );
 
   const issue = data.issueCreate.issue;
+  const identifier = String(issue["identifier"]);
+
+  let relEcho: Partial<RelationSnapshot> | undefined;
+  if (relationChanges.length) {
+    const rel = await applyRelationChanges(identifier, relationChanges, ctx);
+    relEcho = relationEcho(rel.snapshot, rel.touched);
+  }
+
   const blocks = [
-    renderDetail("issue", issue, [
-      field("identifier", "id"),
-      field("title"),
-      pluck("state", "name", "state"),
-      field("url"),
-    ]),
-    renderHelp(getSuggestions({ domain: "issue", action: "create", id: String(issue["identifier"]), ctx })),
+    renderDetail("issue", issue, mutationEchoSchema(echoed, relEcho)),
+    renderHelp(getSuggestions({ domain: "issue", action: "create", id: identifier, ctx })),
   ];
   return renderOutput(blocks);
 }
@@ -471,6 +612,7 @@ const UPDATE_FLAGS = [
   "--parent",
   "--estimate",
   "--due",
+  ...RELATION_FLAGS,
 ];
 
 async function updateIssue(args: string[], ctx?: LinearContext): Promise<string> {
@@ -481,21 +623,33 @@ async function updateIssue(args: string[], ctx?: LinearContext): Promise<string>
   const core = await fetchIssueCore(ref);
   const team: ResolvedTeam = { id: core.team.id, key: core.team.key, name: core.team.name };
 
+  const echoed = new Set<EchoAxis>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- mutation input is dynamic
   const input: Record<string, any> = {};
 
   const title = takeFlag(args, "--title");
-  if (title) input["title"] = title;
+  if (title) {
+    input["title"] = title;
+    echoed.add("title");
+  }
 
   const body = takeBody(args, { valueBoundaryFlags: UPDATE_FLAGS });
   if (body !== undefined) input["description"] = body;
 
   const assignee = takeFlag(args, "--assignee");
-  if (assignee === "none") input["assigneeId"] = null;
-  else if (assignee) input["assigneeId"] = (await resolveUser(assignee)).id;
+  if (assignee === "none") {
+    input["assigneeId"] = null;
+    echoed.add("assignee");
+  } else if (assignee) {
+    input["assigneeId"] = (await resolveUser(assignee)).id;
+    echoed.add("assignee");
+  }
 
   const state = takeFlag(args, "--state");
-  if (state) input["stateId"] = (await resolveState(team, state)).id;
+  if (state) {
+    input["stateId"] = (await resolveState(team, state)).id;
+    echoed.add("state");
+  }
 
   const labelNames = collectRepeatable(args, "--label");
   if (labelNames.length) {
@@ -507,49 +661,96 @@ async function updateIssue(args: string[], ctx?: LinearContext): Promise<string>
     }
     if (added.length) input["addedLabelIds"] = added;
     if (removed.length) input["removedLabelIds"] = removed;
+    echoed.add("labels");
   }
 
   const priority = takeFlag(args, "--priority");
-  if (priority) input["priority"] = parsePriority(priority);
+  if (priority) {
+    input["priority"] = parsePriority(priority);
+    echoed.add("priority");
+  }
 
   const project = takeFlag(args, "--project");
-  if (project === "none") input["projectId"] = null;
-  else if (project) input["projectId"] = (await resolveProject(project)).id;
+  if (project === "none") {
+    input["projectId"] = null;
+    echoed.add("project");
+  } else if (project) {
+    input["projectId"] = (await resolveProject(project)).id;
+    echoed.add("project");
+  }
 
   const cycle = takeFlag(args, "--cycle");
-  if (cycle === "none") input["cycleId"] = null;
-  else if (cycle) input["cycleId"] = (await resolveCycle(cycle, team)).id;
+  if (cycle === "none") {
+    input["cycleId"] = null;
+    echoed.add("cycle");
+  } else if (cycle) {
+    input["cycleId"] = (await resolveCycle(cycle, team)).id;
+    echoed.add("cycle");
+  }
 
   const parent = takeFlag(args, "--parent");
-  if (parent === "none") input["parentId"] = null;
-  else if (parent) input["parentId"] = (await fetchIssueCore(normalizeIssueRef(parent, ctx))).id;
+  if (parent === "none") {
+    input["parentId"] = null;
+    echoed.add("parent");
+  } else if (parent) {
+    input["parentId"] = (await fetchIssueCore(normalizeIssueRef(parent, ctx))).id;
+    echoed.add("parent");
+  }
 
   const estimate = takeFlag(args, "--estimate");
-  if (estimate) input["estimate"] = parseEstimate(estimate);
+  if (estimate) {
+    input["estimate"] = parseEstimate(estimate);
+    echoed.add("estimate");
+  }
 
   const due = takeFlag(args, "--due");
-  if (due === "none") input["dueDate"] = null;
-  else if (due) input["dueDate"] = parseDueDate(due);
+  if (due === "none") {
+    input["dueDate"] = null;
+    echoed.add("due");
+  } else if (due) {
+    input["dueDate"] = parseDueDate(due);
+    echoed.add("due");
+  }
 
-  if (Object.keys(input).length === 0) {
+  const relationValues = collectRelationFlagValues(args);
+  const relationChanges = parseRelationChanges(relationValues, { allowRemove: true });
+  const hasRelations = relationFlagsPresent(relationValues);
+
+  if (Object.keys(input).length === 0 && !hasRelations) {
     throw new AxiError("Nothing to update — pass at least one field flag", "VALIDATION_ERROR", [
       `Run \`linear-axi issue update ${core.identifier} --state <state>\` (see \`issue --help\` for all flags)`,
     ]);
   }
 
-  const data = await updateIssueMutation(core.id, input);
+  let issue: Record<string, unknown> = {
+    identifier: core.identifier,
+    state: { name: core.state.name, type: core.state.type },
+    assignee: core.assignee,
+  };
+  if (Object.keys(input).length > 0) {
+    issue = await updateIssueMutation(core.id, input);
+  }
+
+  let relEcho: Partial<RelationSnapshot> | undefined;
+  let message: string | undefined;
+  if (relationChanges.length) {
+    const rel = await applyRelationChanges(core.identifier, relationChanges, ctx);
+    relEcho = relationEcho(rel.snapshot, rel.touched);
+    if (Object.keys(input).length === 0 && rel.allNoops) {
+      message = rel.noopMessages.join("; ") || "Already up to date";
+      issue = { ...issue, _message: message };
+    }
+  }
+
+  // Always echo id; when only relations changed, still show id + relation fields.
+  if (echoed.size === 0 && !relEcho) echoed.add("state");
+
   const blocks = [
-    renderDetail("issue", data, updateResultSchema),
+    renderDetail("issue", issue, mutationEchoSchema(echoed, relEcho, message)),
     renderHelp(getSuggestions({ domain: "issue", action: "update", id: core.identifier, ctx })),
   ];
   return renderOutput(blocks);
 }
-
-const updateResultSchema: FieldDef[] = [
-  field("identifier", "id"),
-  pluck("state", "name", "state"),
-  custom("assignee", (i) => i.assignee?.displayName ?? "unassigned"),
-];
 
 async function updateIssueMutation(
   issueId: string,
@@ -562,7 +763,7 @@ async function updateIssueMutation(
     `mutation($id: String!, $input: IssueUpdateInput!) {
       issueUpdate(id: $id, input: $input) {
         success
-        issue { identifier state { name type } assignee { displayName } }
+        issue { ${MUTATION_ISSUE_SELECTION} }
       }
     }`,
     { id: issueId, input },

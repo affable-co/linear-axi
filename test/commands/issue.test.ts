@@ -254,6 +254,8 @@ describe("issue view", () => {
         labels: { nodes: [] },
         parent: null,
         children: { nodes: [] },
+        relations: { nodes: [] },
+        inverseRelations: { nodes: [] },
         comments: { nodes: [] },
         attachments: { nodes: [] },
         priority: 2,
@@ -288,6 +290,24 @@ describe("issue view", () => {
     expect(result).toMatch(/sub_issues: "?ENG-2,ENG-3"?/);
   });
 
+  it("renders blocked_by and blocks from relations", async () => {
+    mockedGql.mockResolvedValue(
+      viewResponse({
+        relations: {
+          nodes: [{ id: "r1", type: "blocks", relatedIssue: { identifier: "ENG-9" } }],
+        },
+        inverseRelations: {
+          nodes: [{ id: "r2", type: "blocks", issue: { identifier: "ENG-8" } }],
+        },
+      }),
+    );
+    const result = await issueCommand(["view", "ENG-1"], teamCtx);
+    expect(result).toContain("blocked_by: ENG-8");
+    expect(result).toContain("blocks: ENG-9");
+    expect(result).toContain("relates_to: none");
+    expect(result).toContain("duplicate_of: none");
+  });
+
   it("passes the full description through with --full", async () => {
     const longDescription = "A".repeat(1500);
     mockedGql.mockResolvedValue(viewResponse({ description: longDescription }));
@@ -305,7 +325,20 @@ describe("issue create", () => {
   const createResponse = {
     issueCreate: {
       success: true,
-      issue: { identifier: "ENG-9", title: "New", url: "https://linear.app/acme/issue/ENG-9", state: { name: "Todo" } },
+      issue: {
+        identifier: "ENG-9",
+        title: "New",
+        url: "https://linear.app/acme/issue/ENG-9",
+        state: { name: "Todo" },
+        assignee: { displayName: "Me" },
+        labels: { nodes: [{ name: "bug" }, { name: "ui" }] },
+        project: { name: "Ship" },
+        parent: { identifier: "ENG-1" },
+        cycle: null,
+        priority: 2,
+        estimate: 2,
+        dueDate: "2026-09-01",
+      },
     },
   };
 
@@ -349,6 +382,63 @@ describe("issue create", () => {
     expect(input.labelIds).toEqual(["lbl-bug", "lbl-ui"]);
   });
 
+  it("echoes fields that were set on create", async () => {
+    mockedResolveUser.mockResolvedValue({ id: "u-me", displayName: "Me" });
+    mockedResolveLabel.mockImplementation(async (name: string) => ({ id: `lbl-${name}`, name }));
+    mockedResolveProject.mockResolvedValue({ id: "p1", name: "Ship" });
+    mockedGql
+      .mockResolvedValueOnce(coreResponse()) // parent lookup
+      .mockResolvedValueOnce(createResponse);
+
+    const out = await issueCommand(
+      [
+        "create",
+        "--title",
+        "New",
+        "--assignee",
+        "me",
+        "--label",
+        "bug",
+        "--project",
+        "Ship",
+        "--parent",
+        "ENG-1",
+        "--priority",
+        "high",
+      ],
+      teamCtx,
+    );
+
+    expect(out).toContain("assignee: Me");
+    expect(out).toMatch(/labels: .*bug/);
+    expect(out).toContain("project: Ship");
+    expect(out).toContain("parent: ENG-1");
+    expect(out).toContain("priority: high");
+    // Unset axes are omitted from the echo.
+    expect(out).not.toContain("estimate:");
+  });
+
+  it("creates with --blocked-by and echoes the relation", async () => {
+    mockedGql
+      .mockResolvedValueOnce(createResponse)
+      .mockResolvedValueOnce({
+        issue: { relations: { nodes: [] }, inverseRelations: { nodes: [] } },
+      })
+      .mockResolvedValueOnce({
+        issueRelationCreate: { success: true, issueRelation: { id: "rel-1" } },
+      });
+
+    const out = await issueCommand(
+      ["create", "--title", "New", "--blocked-by", "ENG-1"],
+      teamCtx,
+    );
+
+    expect(mockedGql.mock.calls[2][0]).toContain("issueRelationCreate");
+    const input = (mockedGql.mock.calls[2][1] as { input: Record<string, unknown> }).input;
+    expect(input).toMatchObject({ type: "blocks", issueId: "ENG-1", relatedIssueId: "ENG-9" });
+    expect(out).toContain("blocked_by: ENG-1");
+  });
+
   it("reads the description from a --body-file", async () => {
     await withBodyFile("multi\nline\nbody", async (file) => {
       mockedGql.mockResolvedValue(createResponse);
@@ -390,6 +480,54 @@ describe("issue update", () => {
     await issueCommand(["update", "ENG-1", "--assignee", "none"], teamCtx);
     const input = (mockedGql.mock.calls[1][1] as { input: Record<string, unknown> }).input;
     expect(input.assigneeId).toBeNull();
+  });
+
+  it("echoes only the fields that were updated", async () => {
+    mockedGql.mockResolvedValueOnce(coreResponse()).mockResolvedValueOnce({
+      issueUpdate: {
+        success: true,
+        issue: {
+          identifier: "ENG-1",
+          title: "Renamed",
+          url: "u",
+          state: { name: "Todo", type: "unstarted" },
+          assignee: null,
+          labels: { nodes: [] },
+          project: null,
+          parent: null,
+          cycle: null,
+          priority: 0,
+          estimate: null,
+          dueDate: null,
+        },
+      },
+    });
+
+    const out = await issueCommand(["update", "ENG-1", "--title", "Renamed"], teamCtx);
+    expect(out).toContain("title: Renamed");
+    expect(out).not.toContain("assignee:");
+    expect(out).not.toContain("labels:");
+  });
+
+  it("adds a blocks relation with +/- grammar and is idempotent when already present", async () => {
+    mockedGql
+      .mockResolvedValueOnce(coreResponse())
+      .mockResolvedValueOnce({
+        issue: {
+          relations: {
+            nodes: [{ id: "r1", type: "blocks", relatedIssue: { identifier: "ENG-2" } }],
+          },
+          inverseRelations: { nodes: [] },
+        },
+      });
+
+    const out = await issueCommand(["update", "ENG-1", "--blocks", "+ENG-2"], teamCtx);
+    expect(out).toContain("Already blocks ENG-2");
+    expect(out).toContain("blocks: ENG-2");
+    // No issueUpdate and no issueRelationCreate — relation already existed.
+    expect(mockedGql.mock.calls.some((c) => String(c[0]).includes("issueRelationCreate"))).toBe(
+      false,
+    );
   });
 });
 

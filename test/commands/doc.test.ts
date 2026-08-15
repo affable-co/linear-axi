@@ -44,6 +44,30 @@ describe("docCommand", () => {
     expect(out).toContain("Infra");
   });
 
+  it("supports --fields extras on list", async () => {
+    mockedGql.mockResolvedValue({
+      documents: {
+        nodes: [
+          {
+            id: "doc-1",
+            title: "Runbook",
+            project: { name: "Infra" },
+            updatedAt: new Date().toISOString(),
+            creator: { displayName: "Ada" },
+            url: "https://linear.app/x/document/doc-1",
+          },
+        ],
+        pageInfo: { hasNextPage: false },
+      },
+    } as never);
+
+    const out = await docCommand(["list", "--fields", "creator,url"]);
+    expect(out).toContain("Ada");
+    expect(out).toContain("https://linear.app/x/document/doc-1");
+    expect(String(mockedGql.mock.calls[0][0])).toContain("creator { displayName }");
+    expect(String(mockedGql.mock.calls[0][0])).toContain("url");
+  });
+
   it("renders an explicit empty state", async () => {
     mockedGql.mockResolvedValue({
       documents: { nodes: [], pageInfo: { hasNextPage: false } },

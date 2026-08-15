@@ -30,12 +30,12 @@ import {
 export const PROJECT_HELP = `usage: linear-axi project <subcommand> [args] [flags]
 subcommands[4]:
   list, view <name|uuid>, create, update <name|uuid>
-list flags{4}: --state <backlog|planned|started|paused|completed|canceled>, --query <text> (name contains), --limit <n> (default 25), --fields <a,b,c>
+list flags{4}: --state <backlog|planned|started|paused|completed|canceled>, --query <text> (name contains), --limit <n> (default 25), --fields <a,b,c> (list only)
 view flags{1}: --full (untruncated description)
 create flags{6}: --name (required), --body/--body-file, --lead <me|email|name>, --state, --start <YYYY-MM-DD>, --target <YYYY-MM-DD>
 update flags{6}: --name, --body/--body-file, --lead, --state, --start <YYYY-MM-DD>, --target <YYYY-MM-DD>
 notes:
-  --team <key> (from flag, LINEAR_TEAM, .linear.toml, or git branch) is required for create.
+  --team <key|name> (from flag, LINEAR_TEAM, .linear.toml, or git branch) is required for create.
   Extra --fields for list: lead, teams, start, created, updated, url.
 examples:
   linear-axi project list --state started

@@ -33,7 +33,7 @@ export const TOP_HELP = `usage: linear-axi [command] [args] [flags]
 commands[14]:
   (none)=dashboard, issue, project, cycle, team, state, label, user, doc, search, api, auth, setup
 flags[3]:
-  --team <key> (after command; else LINEAR_TEAM env, .linear.toml team_id, or git branch), --help, -v/-V/--version
+  --team <key|name> (after command; else LINEAR_TEAM env, .linear.toml team_id, or git branch), --help, -v/-V/--version
 examples:
   linear-axi
   linear-axi issue list --state started

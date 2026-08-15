@@ -46,11 +46,13 @@ Never prompt interactively.
 linear-axi                      # home: bin, description, viewer, teams, my active issues, help[]
 linear-axi issue list           # --team --assignee --state --label --project --cycle
                                 # --priority --query --updated-since --limit --fields --sort
-linear-axi issue view <id>      # truncated body + aggregates (comments, attachments, subs, relations)
+linear-axi issue view <id>      # truncated body + aggregates (comments, attachments, subs,
+                                # blocked_by / blocks / relates_to / duplicate_of)
                                 # --full --comments
 linear-axi issue create         # --team --title [--body|stdin] --assignee --state --label
                                 # --priority --project --parent --estimate --due
-linear-axi issue update <id>    # same axes; --label supports +add / -remove
+                                # --blocked-by --blocks --relates-to --duplicate-of
+linear-axi issue update <id>    # same axes; --label / relation flags support +add / -remove
 linear-axi issue close <id>     # idempotent; → first completed-type state; --cancel for canceled
 linear-axi issue reopen <id>    # idempotent
 linear-axi issue comment <id>   # --body | stdin; --reply-to <comment-id>
@@ -66,7 +68,8 @@ linear-axi state list --team
 linear-axi label list [--team]  # workspace + team labels
 linear-axi user list|view
 linear-axi doc list|view|create|update
-linear-axi api <graphql>        # raw GraphQL escape hatch (--input for variables JSON)
+linear-axi api <graphql>        # raw GraphQL escape hatch (--input for variables JSON);
+                                # prints unwrapped data JSON; identifiers accepted
 linear-axi setup                # install session hook (Claude Code/Codex/OpenCode) + skill
 ```
 
@@ -74,8 +77,10 @@ linear-axi setup                # install session hook (Claude Code/Codex/OpenCo
 
 - TOON on stdout; errors also on stdout; stderr only for debug
 - List defaults: 4 fields — issues: `{id,title,state,assignee}`; everything else
-  3–4 fields. `--fields` to extend, validated against a known-field set
-- Every list: `count: N of M total` header (M from API `totalCount`/pageInfo);
+  3–4 fields. `--fields` extends list commands only (not view), validated against a known-field set
+- Create/update echo the fields that were set (labels, project, parent, assignee, state,
+  relations, …) so callers need not follow up with `issue view` to verify
+- Every list: `count: N` header with `(more available)` when truncated — never invent totals;
   a `help[]` hint reveals how to get more when truncated
 - Detail bodies truncated at 1200 chars with `(truncated, N chars total)` +
   `--full` hint, only when actually truncated
@@ -84,6 +89,7 @@ linear-axi setup                # install session hook (Claude Code/Codex/OpenCo
   cycle view shows scope/completed/started counts
 - `help[]` after lists and mutations; omitted on self-contained detail views
 - Priority rendered as name (`urgent/high/medium/low/none`), not magic number
+- Unknown `--label` values fail with `NOT_FOUND` (labels are never auto-created)
 
 ## Errors & exit codes (AXI §6)
 
