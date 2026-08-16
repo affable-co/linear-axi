@@ -38,8 +38,9 @@ describe("apiCommand", () => {
 
   it("HELP documents unwrapped JSON output and includes a mutation example", () => {
     expect(API_HELP).toContain('no {"data":');
-    expect(API_HELP).toContain("issueRelationCreate");
+    expect(API_HELP).toContain("organization");
     expect(API_HELP).toContain("ABC-123");
+    expect(API_HELP).not.toContain("issueRelationCreate");
   });
 
   it("throws immediately (never hangs) when no query and stdin is a TTY", async () => {

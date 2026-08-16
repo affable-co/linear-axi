@@ -48,6 +48,16 @@ describe("createSkillMarkdown", () => {
   it("does not contain a slash-command argument placeholder", () => {
     expect(markdown).not.toContain("$ARGUMENTS");
   });
+
+  it("teaches relation writes via create/update flags, not the GraphQL escape hatch", () => {
+    expect(markdown).toContain("--blocked-by");
+    expect(markdown).toContain("--blocks");
+    expect(markdown).toContain("--relates-to");
+    expect(markdown).toContain("--duplicate-of");
+    expect(markdown).toContain("issue create");
+    expect(markdown).toContain("issue update");
+    expect(markdown).not.toContain("issueRelationCreate");
+  });
 });
 
 describe("createSkillOpenAiYaml", () => {

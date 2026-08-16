@@ -61,7 +61,8 @@ linear-axi requires a Linear API key in the \`LINEAR_API_KEY\` environment varia
 7. Move work along with \`issue start ABC-123\` (assigns you, moves to started, creates the git branch), then \`issue close ABC-123\` when it ships.
 8. Filter lists tightly (\`--state\`, \`--assignee me\`, \`--label\`, \`--parent <id|none>\`, \`--updated-since 2w\`) - narrow queries cost fewer tokens than wide ones.
 9. To find startable children of a spec, use one list call: \`issue list --parent ABC-1 --state unstarted --fields blocked_by\` (direct children only). Do not \`issue view\` the parent then view each child. \`--parent none\` lists top-level issues (no parent).
-10. Every response ends with contextual next-step hints under \`help:\` - follow them.
+10. Set issue relations with dedicated flags on create/update — never via the \`api\` escape hatch: \`issue create --title "..." --blocked-by ABC-1\`, \`issue update ABC-2 --blocks +ABC-3\`. Flags: \`--blocked-by\`, \`--blocks\`, \`--relates-to\`, \`--duplicate-of\` (repeatable). On update, \`+id\`/\`id\` adds and \`-id\` removes (same grammar as \`--label\`).
+11. Every response ends with contextual next-step hints under \`help:\` - follow them.
 
 ## Commands
 
@@ -84,7 +85,8 @@ Run \`${NPX_COMMAND} --help\` for global flags, or \`${NPX_COMMAND} <command> --
 - States accept a name ("In Review") or a type (\`triage\`, \`backlog\`, \`unstarted\`, \`started\`, \`completed\`, \`canceled\`).
 - \`--updated-since\` accepts friendly durations: \`2h\`, \`3d\`, \`2w\`, \`1m\`, \`1y\`, or an ISO date.
 - Issue list \`--parent <id>\` is direct children only (not recursive); \`--parent none\` means no parent. Relation extras via \`--fields\`: \`blocked_by\`, \`blocks\`, \`relates_to\`, \`duplicate_of\` (comma-separated identifiers, same as \`issue view\`).
-- Use \`api\` for anything the dedicated commands do not cover. Output is the unwrapped \`data\` payload (no \`{"data":…}\` wrapper). Identifiers like \`ABC-123\` work wherever Linear accepts issue ids. Example: \`${NPX_COMMAND} api 'mutation($input:IssueRelationCreateInput!){ issueRelationCreate(input:$input){ success } }' --input '{"input":{"type":"blocks","issueId":"ABC-1","relatedIssueId":"ABC-2"}}'\`.
+- To add or remove blockers/relations, use \`issue create\` / \`issue update\` with \`--blocked-by\`, \`--blocks\`, \`--relates-to\`, or \`--duplicate-of\` — not the GraphQL escape hatch.
+- Use \`api\` only for GraphQL the dedicated commands do not cover. Output is the unwrapped \`data\` payload (no \`{"data":…}\` wrapper). Identifiers like \`ABC-123\` work wherever Linear accepts issue ids. Example: \`${NPX_COMMAND} api 'query($id:String!){ issue(id:$id){ title url } }' --input '{"id":"ABC-123"}'\`.
 `;
 }
 
