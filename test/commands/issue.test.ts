@@ -234,6 +234,48 @@ describe("issue list", () => {
     expect(vars.filter.project).toBeUndefined();
   });
 
+  it("filters to direct children for --parent <id>", async () => {
+    mockedGql
+      .mockResolvedValueOnce(coreResponse({ identifier: "ENG-1" }))
+      .mockResolvedValueOnce(issuesResponse([oneIssue]));
+    const result = await issueCommand(["list", "--parent", "eng-1"], teamCtx);
+    expect(result).toContain("parent: ENG-1");
+    const vars = mockedGql.mock.calls[1][1] as { filter: Record<string, unknown> };
+    expect(vars.filter.parent).toEqual({ id: { eq: "issue-node-id" } });
+  });
+
+  it("filters to issues with no parent for --parent none", async () => {
+    mockedGql.mockResolvedValue(issuesResponse([oneIssue]));
+    const result = await issueCommand(["list", "--parent", "none"], teamCtx);
+    expect(result).toContain("parent: none");
+    const vars = mockedGql.mock.calls[0][1] as { filter: Record<string, unknown> };
+    expect(vars.filter.parent).toEqual({ null: true });
+    expect(mockedGql).toHaveBeenCalledTimes(1);
+  });
+
+  it("threads relation --fields into the query and renders comma-separated ids", async () => {
+    mockedGql.mockResolvedValue(
+      issuesResponse([
+        {
+          identifier: "ENG-2",
+          title: "Child",
+          state: { name: "Todo" },
+          assignee: null,
+          relations: { nodes: [{ id: "r1", type: "blocks", relatedIssue: { identifier: "ENG-9" } }] },
+          inverseRelations: {
+            nodes: [{ id: "r2", type: "blocks", issue: { identifier: "ENG-8" } }],
+          },
+        },
+      ]),
+    );
+    const result = await issueCommand(["list", "--fields", "blocked_by,blocks"], teamCtx);
+    const query = mockedGql.mock.calls[0][0] as string;
+    expect(query).toContain("relations(first: 50)");
+    expect(query).toContain("inverseRelations(first: 50)");
+    expect(result).toContain("blocked_by,blocks");
+    expect(result).toMatch(/ENG-2,Child,Todo,unassigned,ENG-8,ENG-9/);
+  });
+
   it("echoes the filters in the empty state", async () => {
     mockedGql.mockResolvedValue(issuesResponse([]));
     const result = await issueCommand(["list", "--priority", "high"], teamCtx);

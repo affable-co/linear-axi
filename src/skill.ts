@@ -59,8 +59,9 @@ linear-axi requires a Linear API key in the \`LINEAR_API_KEY\` environment varia
 5. Scope to a team by placing \`--team <key|name>\` AFTER the command. Without it, the team comes from \`LINEAR_TEAM\`, a \`.linear.toml\` \`team_id\`, or the current git branch's issue identifier.
 6. Scope to a project via \`--project <name>\`, or set \`LINEAR_PROJECT\` / \`.linear.toml\` \`project_id\` so list/create pick it up automatically. On list, \`--project none\` means no project; \`--project any\` ignores the ambient default. Update still requires an explicit \`--project\`.
 7. Move work along with \`issue start ABC-123\` (assigns you, moves to started, creates the git branch), then \`issue close ABC-123\` when it ships.
-8. Filter lists tightly (\`--state\`, \`--assignee me\`, \`--label\`, \`--updated-since 2w\`) - narrow queries cost fewer tokens than wide ones.
-9. Every response ends with contextual next-step hints under \`help:\` - follow them.
+8. Filter lists tightly (\`--state\`, \`--assignee me\`, \`--label\`, \`--parent <id|none>\`, \`--updated-since 2w\`) - narrow queries cost fewer tokens than wide ones.
+9. To find startable children of a spec, use one list call: \`issue list --parent ABC-1 --state unstarted --fields blocked_by\` (direct children only). Do not \`issue view\` the parent then view each child. \`--parent none\` lists top-level issues (no parent).
+10. Every response ends with contextual next-step hints under \`help:\` - follow them.
 
 ## Commands
 
@@ -82,6 +83,7 @@ Run \`${NPX_COMMAND} --help\` for global flags, or \`${NPX_COMMAND} <command> --
 - \`issue close\` moves to the team's first completed-type state; \`issue close --cancel\` uses the canceled-type state instead.
 - States accept a name ("In Review") or a type (\`triage\`, \`backlog\`, \`unstarted\`, \`started\`, \`completed\`, \`canceled\`).
 - \`--updated-since\` accepts friendly durations: \`2h\`, \`3d\`, \`2w\`, \`1m\`, \`1y\`, or an ISO date.
+- Issue list \`--parent <id>\` is direct children only (not recursive); \`--parent none\` means no parent. Relation extras via \`--fields\`: \`blocked_by\`, \`blocks\`, \`relates_to\`, \`duplicate_of\` (comma-separated identifiers, same as \`issue view\`).
 - Use \`api\` for anything the dedicated commands do not cover. Output is the unwrapped \`data\` payload (no \`{"data":…}\` wrapper). Identifiers like \`ABC-123\` work wherever Linear accepts issue ids. Example: \`${NPX_COMMAND} api 'mutation($input:IssueRelationCreateInput!){ issueRelationCreate(input:$input){ success } }' --input '{"input":{"type":"blocks","issueId":"ABC-1","relatedIssueId":"ABC-2"}}'\`.
 `;
 }
