@@ -48,7 +48,7 @@ import {
 export const ISSUE_HELP = `usage: linear-axi issue <subcommand> [args] [flags]
 subcommands[10]:
   list, view, create, update, close, reopen, comment, comments, start, branch
-list flags{11}: --assignee <me|email|name|none>, --state <name|type>, --label <name>, --project <name|none|any>, --cycle <current|next|previous|n|name>, --priority <urgent|high|medium|low|none>, --query <text>, --updated-since <2h|3d|2w|1m|ISO>, --limit <n> (default 25), --fields <a,b,c> (list only), --sort <updated|created>
+list flags{12}: --assignee <me|email|name|none>, --state <name|type>, --label <name>, --project <name|none|any>, --parent <id|none> (direct children only; none = top-level), --cycle <current|next|previous|n|name>, --priority <urgent|high|medium|low|none>, --query <text>, --updated-since <2h|3d|2w|1m|ISO>, --limit <n> (default 25), --fields <a,b,c> (list only), --sort <updated|created>
 view flags{2}: --full (untruncated description), --comments (include comment thread)
 create flags{14}: --title (required), --body/--body-file, --assignee, --state, --label (repeatable; must already exist), --priority, --project, --parent <id>, --estimate <n>, --due <YYYY-MM-DD>, --blocked-by <id>, --blocks <id>, --relates-to <id>, --duplicate-of <id> (relation flags repeatable)
 update flags{15}: --title, --body/--body-file, --assignee, --state, --label +<name>/-<name> (repeatable; bare adds; labels must already exist), --priority, --project, --cycle, --estimate, --due, --parent <id>, --blocked-by +<id>/-<id>, --blocks +<id>/-<id>, --relates-to +<id>/-<id>, --duplicate-of +<id>/-<id> (bare adds)
@@ -61,10 +61,13 @@ notes:
   --team <key|name> is accepted after every subcommand (see \`linear-axi --help\`).
   List/create --project falls back to LINEAR_PROJECT or .linear.toml project_id.
   On list, --project none means unassigned-to-project; --project any ignores the ambient default.
+  On list, --parent <id> filters to direct children only (not recursive); --parent none means no parent.
+  Extra --fields for list: labels, project, cycle, priority, estimate, due, created, updated, url, creator, parent, team, blocked_by, blocks, relates_to, duplicate_of.
   Unknown --label values fail with NOT_FOUND (create the label first via \`label create\`).
   Create/update echo the fields that were set (no follow-up view needed to verify).
 examples:
   linear-axi issue list --assignee me --state started
+  linear-axi issue list --parent ABC-1 --state unstarted --fields blocked_by
   linear-axi issue view ABC-123 --comments
   linear-axi issue create --team ENG --title "Fix login bug" --body-file plan.md --blocked-by ENG-1
   linear-axi issue update ABC-123 --state "In Review" --label +bug --blocks +ENG-2
@@ -79,6 +82,8 @@ const listSchema: FieldDef[] = [
   custom("assignee", (i) => i.assignee?.displayName ?? "unassigned"),
 ];
 
+const LIST_RELATION_SELECTION = RELATION_SELECTION.replace(/\s+/g, " ").trim();
+
 const LIST_EXTRA_FIELDS: Record<string, ExtraFieldSpec> = {
   labels: { selection: "labels { nodes { name } }", def: joinArray("labels", "name", "labels") },
   project: { selection: "project { name }", def: custom("project", (i) => i.project?.name ?? "none") },
@@ -92,6 +97,22 @@ const LIST_EXTRA_FIELDS: Record<string, ExtraFieldSpec> = {
   creator: { selection: "creator { displayName }", def: custom("creator", (i) => i.creator?.displayName ?? "unknown") },
   parent: { selection: "parent { identifier }", def: custom("parent", (i) => i.parent?.identifier ?? "none") },
   team: { selection: "team { key }", def: pluck("team", "key", "team") },
+  blocked_by: {
+    selection: LIST_RELATION_SELECTION,
+    def: custom("blocked_by", (i) => formatRelationList(relationsFromIssue(i).blocked_by)),
+  },
+  blocks: {
+    selection: LIST_RELATION_SELECTION,
+    def: custom("blocks", (i) => formatRelationList(relationsFromIssue(i).blocks)),
+  },
+  relates_to: {
+    selection: LIST_RELATION_SELECTION,
+    def: custom("relates_to", (i) => formatRelationList(relationsFromIssue(i).relates_to)),
+  },
+  duplicate_of: {
+    selection: LIST_RELATION_SELECTION,
+    def: custom("duplicate_of", (i) => formatRelationList(relationsFromIssue(i).duplicate_of)),
+  },
 };
 
 const PRIORITY_NUMBERS: Record<string, number> = Object.fromEntries(
@@ -150,6 +171,7 @@ const LIST_FLAGS = [
   "--state",
   "--label",
   "--project",
+  "--parent",
   "--cycle",
   "--priority",
   "--query",
@@ -228,6 +250,15 @@ async function listIssues(args: string[], ctx?: LinearContext): Promise<string> 
     scopeParts.push(`project: ${resolved.name}`);
   }
 
+  const parent = getFlag(args, "--parent");
+  if (parent === "none") {
+    filter["parent"] = { null: true };
+    scopeParts.push("parent: none");
+  } else if (parent) {
+    const core = await fetchIssueCore(normalizeIssueRef(parent, ctx));
+    filter["parent"] = { id: { eq: core.id } };
+    scopeParts.push(`parent: ${core.identifier}`);
+  }
 
   const cycle = getFlag(args, "--cycle");
   if (cycle) {

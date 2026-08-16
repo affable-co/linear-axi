@@ -44,8 +44,10 @@ Never prompt interactively.
 
 ```
 linear-axi                      # home: bin, description, viewer, teams, my active issues, help[]
-linear-axi issue list           # --team --assignee --state --label --project --cycle
+linear-axi issue list           # --team --assignee --state --label --project --parent --cycle
                                 # --priority --query --updated-since --limit --fields --sort
+                                # --parent <id|none> (direct children; none = top-level)
+                                # --fields may include blocked_by/blocks/relates_to/duplicate_of
 linear-axi issue view <id>      # truncated body + aggregates (comments, attachments, subs,
                                 # blocked_by / blocks / relates_to / duplicate_of)
                                 # --full --comments
