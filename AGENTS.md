@@ -45,5 +45,5 @@ or pruning over appending.
 
 ## Publishing
 
-- npm package and installed binary are both named `linear-axi`. Skill docs teach
-  `npx -y linear-axi`.
+- npm package is `@affable-co/linear-axi`; the installed binary is `linear-axi`. Skill docs
+  teach `npx -y @affable-co/linear-axi`.
