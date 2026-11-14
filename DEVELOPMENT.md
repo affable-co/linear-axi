@@ -9,6 +9,8 @@ pnpm run dev -- issue list   # run from source
 pnpm run build:skill  # regenerate skills/linear-axi/SKILL.md (--check in CI)
 ```
 
+`.github/workflows/ci.yml` runs the skill check, tests and build on every pull request (Node 22 and 24).
+
 # Publishing
 
 The Agent Skill and CLI use separate release channels. Merging changes under
