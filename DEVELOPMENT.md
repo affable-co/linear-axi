@@ -1,6 +1,7 @@
 # Development
 
 ```sh
+mise install          # pinned node/pnpm from mise.toml
 pnpm install
 pnpm run build        # tsc → dist/
 pnpm test             # vitest
